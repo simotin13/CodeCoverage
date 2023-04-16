@@ -6,6 +6,14 @@
 #include "pin.H"
 #include "util.h"
 
+struct LineInfo
+{
+    UINT32 LineNumber;
+    std::string Text;
+    bool Executable;
+    bool Covered;
+};
+
 struct FuncInfo
 {
     std::string Name;
@@ -27,6 +35,7 @@ struct FileCodeCoverage
 {
     std::string Name;
     std::map<std::string, FuncCodeCoverage> FuncCodeCoverageMap;
+    std::vector<LineInfo> Lines;
 };
 
 // =====================================================================
@@ -78,6 +87,20 @@ static void initializeCovorage(IMG img, void *v)
                     continue;
                 }
 
+                // read source file and save to map
+                std::ifstream ifs(filePath);
+
+                // read each line
+                std::string text;
+                UINT32 lineNo = 1;
+                while (std::getline(ifs, text))
+                {
+                    LineInfo line{lineNo, text, false, false};
+                    s_fileCodeCoverageMap[filePath].Lines.push_back(line);
+                    lineNo++;
+                }
+                ifs.close();
+
                 // initialize fileCodeCoverage
                 FileCodeCoverage fileCodeCoverage;
                 fileCodeCoverage.Name = filePath;
@@ -98,6 +121,10 @@ static void initializeCovorage(IMG img, void *v)
                 funcCodeCoverage.LineCoveredMap[line] = false;
                 funcCodeCoverage.InsCoveredMap[addr] = false;
             }
+
+            // set executable line
+            // note that line number start from 1
+            s_fileCodeCoverageMap[filePath].Lines[line - 1].Executable = true;
             funcCodeCoverage.TotalLines = funcCodeCoverage.LineCoveredMap.size();
             funcCodeCoverage.CoveredLines = 0;
             RTN_Close(rtn);
@@ -154,6 +181,7 @@ VOID updateCoverage(INS ins, VOID* v)
     s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].InsCoveredMap[addr] = true;
     if (!s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].LineCoveredMap[line])
     {
+        s_fileCodeCoverageMap[filePath].Lines[line - 1].Covered = true;
         s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].LineCoveredMap[line] = true;
         s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].CoveredLines++;
     }
@@ -165,9 +193,37 @@ void generateIndexHtml(std::string filePath)
     std::string targetModule;
     std::ofstream indexHtml(filePath);
     indexHtml << "<html><head>" << std::endl;
-    std::ifstream ifs("templates/index_head.tpl");
-    std::string s((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    indexHtml << s;
+    indexHtml << "<meta charset='UTF-8'>" << std::endl;
+    indexHtml << "<style type='text/css'>" << std::endl;
+    indexHtml << ".left {" << std::endl;
+    indexHtml << "    text-align: left;" << std::endl;
+    indexHtml << "    padding-left: 3px;" << std::endl;
+    indexHtml << "}" << std::endl;
+    indexHtml << ".center {" << std::endl;
+    indexHtml << "    text-align: center;" << std::endl;
+    indexHtml << "}" << std::endl;
+    indexHtml << ".right {" << std::endl;
+    indexHtml << "    text-align: right;" << std::endl;
+    indexHtml << "    padding-right: 3px;" << std::endl;
+    indexHtml << "}" << std::endl;
+    indexHtml << "table {" << std::endl;
+    indexHtml << "    width: 100%;" << std::endl;
+    indexHtml << "    border-collapse:collapse;" << std::endl;
+    indexHtml << "    border: 1px #333 solid;" << std::endl;
+    indexHtml << "}" << std::endl;
+    indexHtml << "th {" << std::endl;
+    indexHtml << "    border-collapse:collapse;" << std::endl;
+    indexHtml << "    border: 1px #333 solid;" << std::endl;
+    indexHtml << "    font-weight: bold;" << std::endl;
+    indexHtml << "    background-color: #888;" << std::endl;
+    indexHtml << "    text-align: center;" << std::endl;
+    indexHtml << "    color: #EEE;" << std::endl;
+    indexHtml << "}" << std::endl;
+    indexHtml << "td {" << std::endl;
+    indexHtml << "    border-collapse:collapse;" << std::endl;
+    indexHtml << "    border: 1px #333 solid;" << std::endl;
+    indexHtml << "}" << std::endl;
+    indexHtml << "</style>" << std::endl;
     indexHtml << "<title>Code Coverage Report</title>" << std::endl;
     indexHtml << "</head>" << std::endl;
     indexHtml << "<body>" << std::endl;
@@ -214,16 +270,107 @@ void generateIndexHtml(std::string filePath)
 void generateSourceFileHtml(std::string filePath, const FileCodeCoverage & fileCodeCoverage)
 {
     std::string fileHtml = filePath + ".html";
-    std::ofstream sourceFileHtml(fileHtml);
-    sourceFileHtml << "<html><head>" << std::endl;
-    std::ifstream ifs("templates/source_head.tpl");
-    std::string s((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-    sourceFileHtml << s;
-    sourceFileHtml << "<title>Code Coverage Report</title>" << std::endl;
-    sourceFileHtml << "</head>" << std::endl;
-    sourceFileHtml << "<body>" << std::endl;
+    std::ofstream sourceHtml(fileHtml);
+    sourceHtml << "<html><head>" << std::endl;
+    sourceHtml << "<meta charset='UTF-8'>" << std::endl;
+    sourceHtml << "<style type='text/css'>" << std::endl;
+    sourceHtml << "    body {" << std::endl;
+    sourceHtml << "        font-size: 1rem;" << std::endl;
+    sourceHtml << "        color: black;" << std::endl;
+    sourceHtml << "        background-color: #EEE;" << std::endl;
+    sourceHtml << "        margin-top: 0px;" << std::endl;
+    sourceHtml << "        margin-bottom: 0px;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    pre {" << std::endl;
+    sourceHtml << "        margin: 0px;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    table {" << std::endl;
+    sourceHtml << "        width: 100%;" << std::endl;
+    sourceHtml << "        border-collapse: collapse;" << std::endl;
+    sourceHtml << "        border-spacing: 0px;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    td {" << std::endl;
+    sourceHtml << "        margin: 0px;" << std::endl;
+    sourceHtml << "        padding: 0px;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    a {" << std::endl;
+    sourceHtml << "        color: #fff;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    .line-number {" << std::endl;
+    sourceHtml << "        width: 60px;" << std::endl;
+    sourceHtml << "        text-align: center;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    .code {" << std::endl;
+    sourceHtml << "        text-align: left;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    .not-stmt {" << std::endl;
+    sourceHtml << "        background-color: #CCC;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    .covered-line {" << std::endl;
+    sourceHtml << "        background-color: #c0f7c0;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    .not-covered-line {" << std::endl;
+    sourceHtml << "        background-color: #fdc8e4;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    .top-margin {" << std::endl;
+    sourceHtml << "        margin-top: 15px;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    .src-report-header {" << std::endl;
+    sourceHtml << "        color: #FFF;" << std::endl;
+    sourceHtml << "        font-weight: bold;" << std::endl;
+    sourceHtml << "        padding-left: 10px;" << std::endl;
+    sourceHtml << "        margin-top: 5px;" << std::endl;
+    sourceHtml << "        margin-bottom: 5px;" << std::endl;
+    sourceHtml << "        background-color: #555;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "</style>" << std::endl;
 
-    // TODO
+    sourceHtml << "<title>Code Coverage Report</title>" << std::endl;
+    sourceHtml << "</head>" << std::endl;
+    sourceHtml << "<body>" << std::endl;
+    sourceHtml << "<div class='src-report-header'>" << std::endl;
+    sourceHtml << "    <a href={{ .IndexRelPath }}>index</a> > {{ .FileCovInfo.Filepath }}" << std::endl;
+    sourceHtml << "</div>" << std::endl;
+    sourceHtml << "<div class='top-margin'>" << std::endl;
+    sourceHtml << "<details open>" << std::endl;
+    sourceHtml << "<summary>legend</summary>" << std::endl;
+    sourceHtml << "<div class='covered-line'>Executed</div>" << std::endl;
+    sourceHtml << "<div class='not-covered-line'>Not Executed</div>" << std::endl;
+    sourceHtml << "<div class='not-stmt'>Not Stmt</div>" << std::endl;
+    sourceHtml << "</details>" << std::endl;
+    sourceHtml << "</div>" << std::endl;
+    sourceHtml << "<div class='top-margin'>" << std::endl;
+    sourceHtml << "<table cellPadding=0>" << std::endl;
+    sourceHtml << "<h4>code coverage detail</h4>" << std::endl;
+    sourceHtml << "<tbody>" << std::endl;
+    for (const auto & line : fileCodeCoverage.Lines)
+    {
+        if (line.Executable)
+        {
+            if (line.Covered)
+            {
+                sourceHtml << "<tr class='covered-line'>" << std::endl;
+            }
+            else
+            {
+                sourceHtml << "<tr class='not-covered-line'>" << std::endl;
+            }
+        }
+        else
+        {
+            sourceHtml << "<tr class='not-stmt'>" << std::endl;
+        }
+        sourceHtml << "    <td class='line-number'>" << line.LineNumber << "</td>" << std::endl;
+        sourceHtml << "    <td class='code'>" << std::endl;
+        sourceHtml << "    <pre>" <<  line.Text << "</pre>" << std::endl;
+        sourceHtml << "    </td>" << std::endl;
+        sourceHtml << "</tr>" << std::endl;
+    }
+    sourceHtml << "</tbody>" << std::endl;
+    sourceHtml << "</table>" << std::endl;
+    sourceHtml << "</div>" << std::endl;
+    sourceHtml << "</body>" << std::endl;
+    sourceHtml.close();
 }
 
 VOID generateCoverageReport(INT32 code, VOID* v)
