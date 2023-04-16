@@ -49,16 +49,20 @@ static std::map<std::string, std::string> s_funcFileMap;
 
 static void initializeCovorage(IMG img, void *v)
 {
-    s_fileCodeCoverageMap.clear();
+    std::cout << "initializeCovorage In..." << std::endl;
 
     if (!IMG_Valid(img))
     {
         return;
     }
+    
+    if (IMG_IsMainExecutable(img))
+    {
+        s_targetName = IMG_Name(img);
+    }
 
     for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec))
     {
-        s_targetName = IMG_Name(img);
 
         if (!IMG_hasLinesData(img))
         {
@@ -71,7 +75,7 @@ static void initializeCovorage(IMG img, void *v)
             ADDRINT addr = RTN_Address(rtn);
             INT32 col = 0;
             INT32 line = 0;
-            std::string filePath = "";
+            std::string filePath;
             PIN_GetSourceLocation(addr, &col, &line, &filePath);
             if (filePath == "")
             {
@@ -174,18 +178,22 @@ VOID updateCoverage(INS ins, VOID* v)
     }
 }
 
-static std::string LinkForSourceReportHtml(std::string filePath)
+static std::string makeReportFileName(std::string filePath)
 {
     // change file path to html file path
-    // change / to .
-    std::string link = std ::regex_replace(filePath, std::regex("/"), ".");
-    link += ".html";
-    return link;
+    std::string fileName = filePath;
+    if (filePath.find_first_of("/") == 0)
+    {
+        std::cout << fileName << std::endl;
+        fileName = filePath.substr(1);
+    }
+    fileName = std ::regex_replace(fileName, std::regex("/"), ".");
+    fileName += ".html";
+    return fileName;
 }
-static void generateIndexHtml(std::string filePath)
+
+static void generateIndexHtml(const std::string &filePath, const std::string &targetModule)
 {
-    // TODO 
-    std::string targetModule;
     std::ofstream indexHtml(filePath);
     indexHtml << "<html><head>" << std::endl;
     indexHtml << "<meta charset='UTF-8'>" << std::endl;
@@ -226,8 +234,8 @@ static void generateIndexHtml(std::string filePath)
 
     for (auto &fileCodeCoverage : s_fileCodeCoverageMap)
     {
-        std::string link = LinkForSourceReportHtml(fileCodeCoverage.first);
-        indexHtml << StringHelper::strprintf("<h3><a href='%s'>%s</a></h3>", link, filePath) << std::endl;
+        std::string fileName = makeReportFileName(fileCodeCoverage.first);
+        indexHtml << StringHelper::strprintf("<h3><a href='%s'>%s</a></h3>", fileName, fileCodeCoverage.first) << std::endl;
         indexHtml << "<table>" << std::endl;
         indexHtml << "<thead>" << std::endl;
         indexHtml << "<tr>" << std::endl;
@@ -259,10 +267,9 @@ static void generateIndexHtml(std::string filePath)
     indexHtml.close();
 }
 
-void generateSourceFileHtml(std::string filePath, const FileCodeCoverage & fileCodeCoverage)
+void generateSourceFileHtml(std::string reportFilePath, std::string filePath, const FileCodeCoverage & fileCodeCoverage)
 {
-    std::string fileHtml = filePath + ".html";
-    std::ofstream sourceHtml(fileHtml);
+    std::ofstream sourceHtml(reportFilePath);
     sourceHtml << "<html><head>" << std::endl;
     sourceHtml << "<meta charset='UTF-8'>" << std::endl;
     sourceHtml << "<style type='text/css'>" << std::endl;
@@ -316,12 +323,12 @@ void generateSourceFileHtml(std::string filePath, const FileCodeCoverage & fileC
     sourceHtml << "        background-color: #555;" << std::endl;
     sourceHtml << "    }" << std::endl;
     sourceHtml << "</style>" << std::endl;
-
-    sourceHtml << "<title>Code Coverage Report</title>" << std::endl;
+    sourceHtml << StringHelper::strprintf("<title>%s</title>", filePath) << std::endl;
     sourceHtml << "</head>" << std::endl;
+
     sourceHtml << "<body>" << std::endl;
     sourceHtml << "<div class='src-report-header'>" << std::endl;
-    sourceHtml << "    <a href={{ .IndexRelPath }}>index</a> > {{ .FileCovInfo.Filepath }}" << std::endl;
+    sourceHtml << StringHelper::strprintf("    <a href='index.html'>index</a> > %s", filePath) << std::endl;
     sourceHtml << "</div>" << std::endl;
     sourceHtml << "<div class='top-margin'>" << std::endl;
     sourceHtml << "<details open>" << std::endl;
@@ -362,6 +369,7 @@ void generateSourceFileHtml(std::string filePath, const FileCodeCoverage & fileC
     sourceHtml << "</table>" << std::endl;
     sourceHtml << "</div>" << std::endl;
     sourceHtml << "</body>" << std::endl;
+    sourceHtml << "</html>" << std::endl;
     sourceHtml.close();
 }
 
@@ -376,12 +384,15 @@ VOID generateCoverageReport(INT32 code, VOID* v)
         mkdir("report", 0755);
     }
 
-    generateIndexHtml("report/index.html");
+    generateIndexHtml("report/index.html", s_targetName);
     
     // generate each source file html
     for (auto &fileCodeCoverage : s_fileCodeCoverageMap)
     {
-        generateSourceFileHtml(fileCodeCoverage.first, fileCodeCoverage.second);
+        std::cout << "generate source file html: " << fileCodeCoverage.first << std::endl;
+        std::string reportFileName = makeReportFileName(fileCodeCoverage.first);
+        std::string reportFilePath = "report/" + reportFileName;
+        generateSourceFileHtml(reportFilePath, fileCodeCoverage.first, fileCodeCoverage.second);
     }
 
     return;
@@ -389,6 +400,7 @@ VOID generateCoverageReport(INT32 code, VOID* v)
 
 int main(int argc, char **argv)
 {
+    std::cout << "Code Coverage Tool Start..." << std::endl;
     PIN_InitSymbols();
     if(PIN_Init(argc,argv)) {
         std::exit(EXIT_FAILURE);
@@ -397,6 +409,8 @@ int main(int argc, char **argv)
     IMG_AddInstrumentFunction(initializeCovorage, NULL);
     INS_AddInstrumentFunction(updateCoverage, NULL);
     PIN_AddFiniFunction(generateCoverageReport, 0);
+
+    std::cout << "Start Program..." << std::endl;
 
     PIN_StartProgram();
     std::exit(EXIT_SUCCESS);
