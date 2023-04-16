@@ -1,3 +1,4 @@
+#include <cmath>
 #include <string>
 #include <map>
 #include <fstream>
@@ -29,8 +30,8 @@ struct FuncCodeCoverage
     std::map<ADDRINT, INT32> AddrLineMap;
     std::map<INT32, bool> LineCoveredMap;
     std::map<ADDRINT, bool> InsCoveredMap;
-    UINT32 TotalLines;
-    UINT32 CoveredLines;
+    UINT32 TotalLineCount;
+    UINT32 CoveredLineCount;
 };
 
 struct FileCodeCoverage
@@ -49,8 +50,6 @@ static std::map<std::string, std::string> s_funcFileMap;
 
 static void initializeCovorage(IMG img, void *v)
 {
-    std::cout << "initializeCovorage In..." << std::endl;
-
     if (!IMG_Valid(img))
     {
         return;
@@ -93,6 +92,9 @@ static void initializeCovorage(IMG img, void *v)
                     continue;
                 }
 
+                FileCodeCoverage fileCodeCoverage;
+                fileCodeCoverage.FilePath = filePath;
+
                 // read source file and save to map
                 std::ifstream ifs(filePath);
 
@@ -102,14 +104,11 @@ static void initializeCovorage(IMG img, void *v)
                 while (std::getline(ifs, text))
                 {
                     LineInfo line{lineNo, text, false, false};
-                    s_fileCodeCoverageMap[filePath].Lines.push_back(line);
+                    fileCodeCoverage.Lines.push_back(line);
                     lineNo++;
                 }
                 ifs.close();
 
-                // initialize fileCodeCoverage
-                FileCodeCoverage fileCodeCoverage;
-                fileCodeCoverage.FilePath = filePath;
                 s_fileCodeCoverageMap[filePath] = fileCodeCoverage;
             }
 
@@ -122,17 +121,18 @@ static void initializeCovorage(IMG img, void *v)
                 addr = INS_Address(ins);
                 PIN_GetSourceLocation(addr, &col, &line, &filePath);
 
+                // set executable line
+                // note that line number start from 1
+                s_fileCodeCoverageMap[filePath].Lines[line - 1].Executable = true;
+
                 // initialize funcCodeCoverage
                 funcCodeCoverage.AddrLineMap[addr] = line;
                 funcCodeCoverage.LineCoveredMap[line] = false;
                 funcCodeCoverage.InsCoveredMap[addr] = false;
             }
 
-            // set executable line
-            // note that line number start from 1
-            s_fileCodeCoverageMap[filePath].Lines[line - 1].Executable = true;
-            funcCodeCoverage.TotalLines = funcCodeCoverage.LineCoveredMap.size();
-            funcCodeCoverage.CoveredLines = 0;
+            funcCodeCoverage.TotalLineCount = funcCodeCoverage.LineCoveredMap.size();
+            funcCodeCoverage.CoveredLineCount = 0;
             RTN_Close(rtn);
 
             s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName] = funcCodeCoverage;
@@ -174,7 +174,7 @@ VOID updateCoverage(INS ins, VOID* v)
     {
         s_fileCodeCoverageMap[filePath].Lines[line - 1].Covered = true;
         s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].LineCoveredMap[line] = true;
-        s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].CoveredLines++;
+        s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].CoveredLineCount++;
     }
 }
 
@@ -184,12 +184,22 @@ static std::string makeReportFileName(std::string filePath)
     std::string fileName = filePath;
     if (filePath.find_first_of("/") == 0)
     {
-        std::cout << fileName << std::endl;
         fileName = filePath.substr(1);
     }
     fileName = std ::regex_replace(fileName, std::regex("/"), ".");
     fileName += ".html";
     return fileName;
+}
+
+static std::string encodeHtml(const std::string &text)
+{
+    std::string encodedText = text;
+    encodedText = std::regex_replace(encodedText, std::regex("&"), "&amp;");
+    encodedText = std::regex_replace(encodedText, std::regex("<"), "&lt;");
+    encodedText = std::regex_replace(encodedText, std::regex(">"), "&gt;");
+    encodedText = std::regex_replace(encodedText, std::regex("\""), "&quot;");
+    encodedText = std::regex_replace(encodedText, std::regex("'"), "&apos;");
+    return encodedText;
 }
 
 static void generateIndexHtml(const std::string &filePath, const std::string &targetModule)
@@ -248,16 +258,17 @@ static void generateIndexHtml(const std::string &filePath, const std::string &ta
         for(auto &funcCodeCoverage : fileCodeCoverage.second.FuncCodeCoverageMap)
         {
             std::string funcName = funcCodeCoverage.first;
-            INT32 totalLineCount = funcCodeCoverage.second.TotalLines;
+            INT32 coveredLineCount = funcCodeCoverage.second.CoveredLineCount;
+            INT32 totalLineCount = funcCodeCoverage.second.TotalLineCount;
             INT32 coveredRate = 0;
             if (totalLineCount != 0)
             {
-                coveredRate = funcCodeCoverage.second.CoveredLines * 100 / totalLineCount;
+                float rate = ((float) coveredLineCount / (float)totalLineCount) * 100;
+                coveredRate = std::round(rate);
             }
-            INT32 coveredLineCount = 0;
             indexHtml << "<tr>" << std::endl;
             indexHtml << StringHelper::strprintf("<td class='left'>%s</td>", funcName) << std::endl;
-            indexHtml << StringHelper::strprintf("<td class='center'>%d</td>", coveredRate) << std::endl;
+            indexHtml << StringHelper::strprintf("<td class='center'>%d%</td>", coveredRate) << std::endl;
             indexHtml << StringHelper::strprintf("<td class='center'>%d / %d</td>", coveredLineCount, totalLineCount) << std::endl;
             indexHtml << "</tr>" << std::endl;
         }
@@ -361,7 +372,7 @@ void generateSourceFileHtml(std::string reportFilePath, std::string filePath, co
         }
         sourceHtml << "    <td class='line-number'>" << line.LineNumber << "</td>" << std::endl;
         sourceHtml << "    <td class='code'>" << std::endl;
-        sourceHtml << "    <pre>" <<  line.Text << "</pre>" << std::endl;
+        sourceHtml << "    <pre>" << encodeHtml(line.Text) << "</pre>" << std::endl;
         sourceHtml << "    </td>" << std::endl;
         sourceHtml << "</tr>" << std::endl;
     }
@@ -375,6 +386,8 @@ void generateSourceFileHtml(std::string reportFilePath, std::string filePath, co
 
 VOID generateCoverageReport(INT32 code, VOID* v)
 {
+    std::cout << "Program trace Finished, generating Coverage report..." << std::endl;
+
     // generate index.html
     struct stat st;
     int ret = stat("report", &st);
@@ -387,14 +400,16 @@ VOID generateCoverageReport(INT32 code, VOID* v)
     generateIndexHtml("report/index.html", s_targetName);
     
     // generate each source file html
-    for (auto &fileCodeCoverage : s_fileCodeCoverageMap)
+    for (auto &entry : s_fileCodeCoverageMap)
     {
-        std::cout << "generate source file html: " << fileCodeCoverage.first << std::endl;
-        std::string reportFileName = makeReportFileName(fileCodeCoverage.first);
+        std::string sourceFilePath = entry.first;
+        FileCodeCoverage &fileCodeCoverage = entry.second;
+        std::string reportFileName = makeReportFileName(sourceFilePath);
         std::string reportFilePath = "report/" + reportFileName;
-        generateSourceFileHtml(reportFilePath, fileCodeCoverage.first, fileCodeCoverage.second);
+        generateSourceFileHtml(reportFilePath, sourceFilePath, fileCodeCoverage);
     }
 
+    std::cout << "Coverage report generaged." << std::endl;
     return;
 }
 
@@ -410,7 +425,7 @@ int main(int argc, char **argv)
     INS_AddInstrumentFunction(updateCoverage, NULL);
     PIN_AddFiniFunction(generateCoverageReport, 0);
 
-    std::cout << "Start Program..." << std::endl;
+    std::cout << "Program trace Start" << std::endl;
 
     PIN_StartProgram();
     std::exit(EXIT_SUCCESS);
