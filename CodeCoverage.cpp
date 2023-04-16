@@ -3,6 +3,8 @@
 #include <fstream>
 #include <iostream>
 #include <sys/stat.h>
+#include <regex>
+
 #include "pin.H"
 #include "util.h"
 
@@ -33,7 +35,7 @@ struct FuncCodeCoverage
 
 struct FileCodeCoverage
 {
-    std::string Name;
+    std::string FilePath;
     std::map<std::string, FuncCodeCoverage> FuncCodeCoverageMap;
     std::vector<LineInfo> Lines;
 };
@@ -41,6 +43,7 @@ struct FileCodeCoverage
 // =====================================================================
 // Global Variables
 // =====================================================================
+static std::string s_targetName;
 static std::map<std::string, FileCodeCoverage> s_fileCodeCoverageMap;
 static std::map<std::string, std::string> s_funcFileMap;
 
@@ -55,8 +58,7 @@ static void initializeCovorage(IMG img, void *v)
 
     for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec))
     {
-        std::string imgName = IMG_Name(img);
-        std::cout << "imgName:" << imgName << std::endl;
+        s_targetName = IMG_Name(img);
 
         if (!IMG_hasLinesData(img))
         {
@@ -103,7 +105,7 @@ static void initializeCovorage(IMG img, void *v)
 
                 // initialize fileCodeCoverage
                 FileCodeCoverage fileCodeCoverage;
-                fileCodeCoverage.Name = filePath;
+                fileCodeCoverage.FilePath = filePath;
                 s_fileCodeCoverageMap[filePath] = fileCodeCoverage;
             }
 
@@ -133,21 +135,6 @@ static void initializeCovorage(IMG img, void *v)
             s_funcFileMap[funcName] = filePath;
         }
     }
-
-#if 0
-    for (auto &fileCodeCoverage : s_fileCodeCoverageMap)
-    {
-        std::cout << "file: " << fileCodeCoverage.first << std::endl;
-        for (auto &funcCodeCoverage : fileCodeCoverage.second.FuncCodeCoverageMap)
-        {
-            std::cout << "func: " << funcCodeCoverage.first << std::endl;
-            for (auto &lineCovered : funcCodeCoverage.second.LineCoveredMap)
-            {
-                std::cout << "line: " << lineCovered.first << std::endl;
-            }
-        }
-    }
-#endif
 
     return;
 }
@@ -187,7 +174,15 @@ VOID updateCoverage(INS ins, VOID* v)
     }
 }
 
-void generateIndexHtml(std::string filePath)
+static std::string LinkForSourceReportHtml(std::string filePath)
+{
+    // change file path to html file path
+    // change / to .
+    std::string link = std ::regex_replace(filePath, std::regex("/"), ".");
+    link += ".html";
+    return link;
+}
+static void generateIndexHtml(std::string filePath)
 {
     // TODO 
     std::string targetModule;
@@ -224,27 +219,24 @@ void generateIndexHtml(std::string filePath)
     indexHtml << "    border: 1px #333 solid;" << std::endl;
     indexHtml << "}" << std::endl;
     indexHtml << "</style>" << std::endl;
-    indexHtml << "<title>Code Coverage Report</title>" << std::endl;
+    indexHtml << StringHelper::strprintf("<title>Code Coverage Report for %s </title>", s_targetName) << std::endl;
     indexHtml << "</head>" << std::endl;
     indexHtml << "<body>" << std::endl;
     indexHtml << StringHelper::strprintf("<h2>target module %s</h2>", targetModule) << std::endl;
 
-    // TODO
-    std::string fileName = "";
-    std::string fileHtml = fileName + ".html";
-    std::string ReportFileLink = StringHelper::strprintf("<a href='%s'>%s</a>", fileHtml, fileName);
-    indexHtml << StringHelper::strprintf("<h3><a href='%s'>%s</a></h3>", ReportFileLink, fileHtml) << std::endl;
-    indexHtml << "<table>" << std::endl;
-    indexHtml << "<thead>" << std::endl;
-    indexHtml << "<tr>" << std::endl;
-    indexHtml << "<th>function name</th>" << std::endl;
-    indexHtml << "<th>function coverage(%)</th>" << std::endl;
-    indexHtml << "<th>executed / total(lines)</th>" << std::endl;
-    indexHtml << "</tr>" << std::endl;
-    indexHtml << "</thead>" << std::endl;
-    indexHtml << "<tbody>" << std::endl;
     for (auto &fileCodeCoverage : s_fileCodeCoverageMap)
     {
+        std::string link = LinkForSourceReportHtml(fileCodeCoverage.first);
+        indexHtml << StringHelper::strprintf("<h3><a href='%s'>%s</a></h3>", link, filePath) << std::endl;
+        indexHtml << "<table>" << std::endl;
+        indexHtml << "<thead>" << std::endl;
+        indexHtml << "<tr>" << std::endl;
+        indexHtml << "<th>function name</th>" << std::endl;
+        indexHtml << "<th>function coverage(%)</th>" << std::endl;
+        indexHtml << "<th>executed / total(lines)</th>" << std::endl;
+        indexHtml << "</tr>" << std::endl;
+        indexHtml << "</thead>" << std::endl;
+        indexHtml << "<tbody>" << std::endl;
         for(auto &funcCodeCoverage : fileCodeCoverage.second.FuncCodeCoverageMap)
         {
             std::string funcName = funcCodeCoverage.first;
@@ -261,8 +253,8 @@ void generateIndexHtml(std::string filePath)
             indexHtml << StringHelper::strprintf("<td class='center'>%d / %d</td>", coveredLineCount, totalLineCount) << std::endl;
             indexHtml << "</tr>" << std::endl;
         }
+        indexHtml << "</tbody>" << std::endl;
     }
-    indexHtml << "</tbody>" << std::endl;
     indexHtml << "</body></html>" << std::endl;
     indexHtml.close();
 }
