@@ -273,6 +273,8 @@ static void generateIndexHtml(const std::string &filePath, const std::string &ta
             indexHtml << "</tr>" << std::endl;
         }
         indexHtml << "</tbody>" << std::endl;
+        indexHtml << "</table>" << std::endl;
+        
     }
     indexHtml << "</body></html>" << std::endl;
     indexHtml.close();
