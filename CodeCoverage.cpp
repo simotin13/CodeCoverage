@@ -388,7 +388,7 @@ void generateSourceFileHtml(std::string reportFilePath, std::string filePath, co
 
 VOID generateCoverageReport(INT32 code, VOID* v)
 {
-    std::cout << "Program trace Finished, generating Coverage report..." << std::endl;
+    std::cout << "[CodeCoverage] Program trace Finished, generating Coverage report..." << std::endl;
 
     // generate index.html
     struct stat st;
@@ -411,13 +411,13 @@ VOID generateCoverageReport(INT32 code, VOID* v)
         generateSourceFileHtml(reportFilePath, sourceFilePath, fileCodeCoverage);
     }
 
-    std::cout << "Coverage report generaged." << std::endl;
+    std::cout << "[CodeCoverage] Coverage Report generated. Please check `report/index.html' using your browser." << std::endl;
     return;
 }
 
 int main(int argc, char **argv)
 {
-    std::cout << "Code Coverage Tool Start..." << std::endl;
+    std::cout << "[CodeCoverage] Start..." << std::endl;
     PIN_InitSymbols();
     if(PIN_Init(argc,argv)) {
         std::exit(EXIT_FAILURE);
@@ -427,7 +427,7 @@ int main(int argc, char **argv)
     INS_AddInstrumentFunction(updateCoverage, NULL);
     PIN_AddFiniFunction(generateCoverageReport, 0);
 
-    std::cout << "Program trace Start" << std::endl;
+    std::cout << "[CodeCoverage] Program trace Start" << std::endl;
 
     PIN_StartProgram();
     std::exit(EXIT_SUCCESS);
