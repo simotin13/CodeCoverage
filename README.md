@@ -1,4 +1,4 @@
-[日本語のREADMEはこちら](https://github.com/simotin13/CodeCoverage/blob/main/README.md)
+[日本語のREADMEはこちら](https://github.com/simotin13/CodeCoverage/blob/main/README-ja.md)
 
 # What is this ?
 This repository is a code coverage tool that utilizes [Pin](https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-dynamic-binary-instrumentation-tool.html), a Dynamic Binary Instrumentation (DBI) engine published by Intel. It operates as a Pin plugin.
