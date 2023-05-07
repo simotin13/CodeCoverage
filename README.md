@@ -15,7 +15,13 @@ git clone git@github.com:simotin13/CodeCoverage.git
 Pin tool itself is required to run the code.
 You can download the Pin tool from the Intel Pin website.
 
-Scripts for downloading, building, and running examples are included in this repository. Please start by running `00_setup.sh.`
+Scripts for downloading, building, and running examples are included in this repository.
+Please start by running `00_setup.sh.`
+
+```
+cd CodeCoverage/
+./00_setup.sh
+```
 
 In `00_setup.sh`, Pin 3.27 is downloaded and extracted to the same directory as this repository. Then, the source code in this repository is built.
 
