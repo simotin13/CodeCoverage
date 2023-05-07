@@ -19,6 +19,10 @@ Pin本体は[Intel Pin](https://www.intel.com/content/www/us/en/developer/articl
 ダウンロード＆ビルド、および実行例のスクリプトがこのレポジトリに含まれています。
 
 まずは、`00_setup.sh`を実行してください。
+```
+cd CodeCoverage/
+./00_setup.sh
+```
 
 `00_setup.sh` では、
 [Pin 3.27](https://software.intel.com/sites/landingpage/pintool/downloads/pin-3.27-98718-gbeaa5d51e-gcc-linux.tar.gz)
