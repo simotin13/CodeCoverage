@@ -7,17 +7,22 @@ Pinのプラグインとして動作します。
 # サポートしているプラットフォーム
 - GNU/Linux
 
-# 使い方
-
-# Quick Start
+# 使い方(Quick Start)
 本レポジトリをダウンロードしてください。
+```
+git clone git@github.com:simotin13/CodeCoverage.git
+```
 
-また、実行にはPin本体が必要になります。
+実行にはPin本体が必要になります。
 Pin本体は[Intel Pin](https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-dynamic-binary-instrumentation-tool.html)のサイトからダウンロードする必要があります。
 
 ダウンロード＆ビルド、および実行例のスクリプトがこのレポジトリに含まれています。
 
 まずは、`00_setup.sh`を実行してください。
+```
+cd CodeCoverage/
+./00_setup.sh
+```
 
 `00_setup.sh` では、
 [Pin 3.27](https://software.intel.com/sites/landingpage/pintool/downloads/pin-3.27-98718-gbeaa5d51e-gcc-linux.tar.gz)
@@ -48,3 +53,12 @@ pinのツールをビルドする際の作法として、PIN本体のディレ�
 ../pin-3.27-98718-gbeaa5d51e-gcc-linux/pin -t ./obj-intel64/CodeCoverage.so -- <target_module_path> <target_args...>
 ```
 のようにコマンドを実行してください。
+
+# 注意事項
+このカバレッジツールでは行番号の情報を取得するためにDWARFのデバッグ情報を利用しています。
+Pin 3.27ではデバッグ情報としてDWARF4をサポートしています。カバレッジの計測対象のアプリケーションのをビルドする際は `-g` オプションと `-gdwarf-4` オプションをつけてビルドしてください。
+
+例).
+```
+gcc -g -gdwarf-4 main.c
+```

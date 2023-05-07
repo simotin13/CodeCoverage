@@ -7,12 +7,21 @@ This repository is a code coverage tool that utilizes [Pin](https://www.intel.co
 - GNU/Linux
 
 # How to use (Quick Start)
-Please download this repository.
+First, download this repository.
+```
+git clone git@github.com:simotin13/CodeCoverage.git
+```
 
-In addition, the Pin tool itself is required to run the code.
+Pin tool itself is required to run the code.
 You can download the Pin tool from the Intel Pin website.
 
-Scripts for downloading, building, and running examples are included in this repository. Please start by running `00_setup.sh.`
+Scripts for downloading, building, and running examples are included in this repository.
+Please start by running `00_setup.sh.`
+
+```
+cd CodeCoverage/
+./00_setup.sh
+```
 
 In `00_setup.sh`, Pin 3.27 is downloaded and extracted to the same directory as this repository. Then, the source code in this repository is built.
 
@@ -45,3 +54,11 @@ To run this tool, execute the following command:
 
 where <target_module_path> and <target_args...> are the path and any arguments for the target module you want to measure code coverage for.
 
+# Note
+This coverage tool uses DWARF debugging information to obtain line number information.
+Pin 3.27 supports DWARF4 as debugging information. When building the application for which you want to measure coverage, please build it with the `-g` and `-gdwarf-4` options.
+
+例).
+```
+gcc -g -gdwarf-4 main.c
+```
