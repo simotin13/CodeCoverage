@@ -28,6 +28,7 @@ struct FuncCodeCoverage
 {
     std::string Name;
     std::map<ADDRINT, INT32> AddrLineMap;
+    std::map<ADDRINT, std::string> AddrAsmMap;
     std::map<INT32, bool> LineCoveredMap;
     std::map<ADDRINT, bool> InsCoveredMap;
     UINT32 TotalLineCount;
@@ -114,7 +115,6 @@ static void initializeCovorage(IMG img, void *v)
 
             FuncCodeCoverage funcCodeCoverage;
             const std::string &funcName = RTN_Name(rtn);
-
             RTN_Open(rtn);
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
@@ -126,9 +126,10 @@ static void initializeCovorage(IMG img, void *v)
                 s_fileCodeCoverageMap[filePath].Lines[line - 1].Executable = true;
 
                 // initialize funcCodeCoverage
-                funcCodeCoverage.AddrLineMap[addr] = line;
-                funcCodeCoverage.LineCoveredMap[line] = false;
-                funcCodeCoverage.InsCoveredMap[addr] = false;
+                funcCodeCoverage.AddrLineMap[addr]      = line;
+                funcCodeCoverage.LineCoveredMap[line]   = false;
+                funcCodeCoverage.InsCoveredMap[addr]    = false;
+                funcCodeCoverage.AddrAsmMap[addr]       = INS_Disassemble(ins);
             }
 
             funcCodeCoverage.TotalLineCount = funcCodeCoverage.LineCoveredMap.size();
@@ -178,7 +179,7 @@ VOID updateCoverage(INS ins, VOID* v)
     }
 }
 
-static std::string makeReportFileName(std::string filePath)
+static std::string makeReportFileName(const std::string &filePath)
 {
     // change file path to html file path
     std::string fileName = filePath;
@@ -187,6 +188,19 @@ static std::string makeReportFileName(std::string filePath)
         fileName = filePath.substr(1);
     }
     fileName = std ::regex_replace(fileName, std::regex("/"), ".");
+    fileName += ".html";
+    return fileName;
+}
+
+static std::string makeAsmReportFileName(const std::string &filePath)
+{
+    // change file path to html file path
+    std::string fileName = filePath;
+    if (filePath.find_first_of("/") == 0)
+    {
+        fileName = filePath.substr(1);
+    }
+    fileName = "asm_" + std ::regex_replace(fileName, std::regex("/"), ".");
     fileName += ".html";
     return fileName;
 }
@@ -280,7 +294,7 @@ static void generateIndexHtml(const std::string &filePath, const std::string &ta
     indexHtml.close();
 }
 
-void generateSourceFileHtml(std::string reportFilePath, std::string filePath, const FileCodeCoverage & fileCodeCoverage)
+void generateSourceFileHtml(const std::string &reportFilePath, const std::string & filePath, const FileCodeCoverage & fileCodeCoverage)
 {
     std::ofstream sourceHtml(reportFilePath);
     sourceHtml << "<html><head>" << std::endl;
@@ -305,8 +319,17 @@ void generateSourceFileHtml(std::string reportFilePath, std::string filePath, co
     sourceHtml << "        margin: 0px;" << std::endl;
     sourceHtml << "        padding: 0px;" << std::endl;
     sourceHtml << "    }" << std::endl;
-    sourceHtml << "    a {" << std::endl;
-    sourceHtml << "        color: #fff;" << std::endl;
+    sourceHtml << "    a.link-index {" << std::endl;
+    sourceHtml << "        color: #FFF;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    a.link-index:visited{" << std::endl;
+    sourceHtml << "        color: #FFF;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    a.link-disassemble {" << std::endl;
+    sourceHtml << "        color: #00F;" << std::endl;
+    sourceHtml << "    }" << std::endl;
+    sourceHtml << "    a.link-disassemble:visited{" << std::endl;
+    sourceHtml << "        color: #00F;" << std::endl;
     sourceHtml << "    }" << std::endl;
     sourceHtml << "    .line-number {" << std::endl;
     sourceHtml << "        width: 60px;" << std::endl;
@@ -341,7 +364,7 @@ void generateSourceFileHtml(std::string reportFilePath, std::string filePath, co
 
     sourceHtml << "<body>" << std::endl;
     sourceHtml << "<div class='src-report-header'>" << std::endl;
-    sourceHtml << StringHelper::strprintf("    <a href='index.html'>index</a> > %s", filePath) << std::endl;
+    sourceHtml << StringHelper::strprintf("    <a href='index.html' class='link-index'>index</a> > %s", filePath) << std::endl;
     sourceHtml << "</div>" << std::endl;
     sourceHtml << "<div class='top-margin'>" << std::endl;
     sourceHtml << "<details open>" << std::endl;
@@ -353,7 +376,8 @@ void generateSourceFileHtml(std::string reportFilePath, std::string filePath, co
     sourceHtml << "</div>" << std::endl;
     sourceHtml << "<div class='top-margin'>" << std::endl;
     sourceHtml << "<table cellPadding=0>" << std::endl;
-    sourceHtml << "<h4>code coverage detail</h4>" << std::endl;
+    std::string asmReportFileName = makeAsmReportFileName(filePath);
+    sourceHtml << StringHelper::strprintf("<h4><a href='%s' class='link-disassemble'>show disassemble</a></h4>", asmReportFileName) << std::endl;
     sourceHtml << "<tbody>" << std::endl;
     for (const auto & line : fileCodeCoverage.Lines)
     {
@@ -386,6 +410,154 @@ void generateSourceFileHtml(std::string reportFilePath, std::string filePath, co
     sourceHtml.close();
 }
 
+void generateAsmHtml(std::string asmReportFilePath, std::string filePath, const FileCodeCoverage & fileCodeCoverage)
+{
+    std::ofstream asmHtml(asmReportFilePath);
+    asmHtml << "<html><head>" << std::endl;
+    asmHtml << "<meta charset='UTF-8'>" << std::endl;
+    asmHtml << "<style type='text/css'>" << std::endl;
+    asmHtml << "    body {" << std::endl;
+    asmHtml << "        font-size: 1rem;" << std::endl;
+    asmHtml << "        color: black;" << std::endl;
+    asmHtml << "        background-color: #EEE;" << std::endl;
+    asmHtml << "        margin-top: 0px;" << std::endl;
+    asmHtml << "        margin-bottom: 0px;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    pre {" << std::endl;
+    asmHtml << "        margin: 0px;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    table {" << std::endl;
+    asmHtml << "        width: 100%;" << std::endl;
+    asmHtml << "        border-collapse: collapse;" << std::endl;
+    asmHtml << "        border-spacing: 0px;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    td {" << std::endl;
+    asmHtml << "        margin: 0px;" << std::endl;
+    asmHtml << "        padding: 0px;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    a.link-index {" << std::endl;
+    asmHtml << "        color: #FFF;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    a.link-index:visited{" << std::endl;
+    asmHtml << "        color: #FFF;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    a.link-report {" << std::endl;
+    asmHtml << "        color: #00F;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    a.link-report:visited{" << std::endl;
+    asmHtml << "        color: #00F;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .line-number {" << std::endl;
+    asmHtml << "        width: 60px;" << std::endl;
+    asmHtml << "        text-align: center;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .code {" << std::endl;
+    asmHtml << "        text-align: left;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .ins-addr {" << std::endl;
+    asmHtml << "        width: 60px;" << std::endl;
+    asmHtml << "        text-align: center;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .mnemonic {" << std::endl;
+    asmHtml << "        text-align: left;" << std::endl;
+    asmHtml << "        padding-left: 1.5em;" << std::endl;
+    asmHtml << "        width: 30%;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .not-stmt {" << std::endl;
+    asmHtml << "        background-color: #CCC;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .covered-line {" << std::endl;
+    asmHtml << "        background-color: #c0f7c0;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .not-covered-line {" << std::endl;
+    asmHtml << "        background-color: #fdc8e4;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .top-margin {" << std::endl;
+    asmHtml << "        margin-top: 15px;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "    .src-report-header {" << std::endl;
+    asmHtml << "        color: #FFF;" << std::endl;
+    asmHtml << "        font-weight: bold;" << std::endl;
+    asmHtml << "        padding-left: 10px;" << std::endl;
+    asmHtml << "        margin-top: 5px;" << std::endl;
+    asmHtml << "        margin-bottom: 5px;" << std::endl;
+    asmHtml << "        background-color: #555;" << std::endl;
+    asmHtml << "    }" << std::endl;
+    asmHtml << "</style>" << std::endl;
+    asmHtml << StringHelper::strprintf("<title>%s</title>", filePath) << std::endl;
+    asmHtml << "</head>" << std::endl;
+
+    asmHtml << "<body>" << std::endl;
+    asmHtml << "<div class='src-report-header'>" << std::endl;
+    asmHtml << StringHelper::strprintf("    <a href='index.html' class='link-index'>index</a> > %s", filePath) << std::endl;
+    asmHtml << "</div>" << std::endl;
+    asmHtml << "<div class='top-margin'>" << std::endl;
+    asmHtml << "<details open>" << std::endl;
+    asmHtml << "<summary>legend</summary>" << std::endl;
+    asmHtml << "<div class='covered-line'>Executed</div>" << std::endl;
+    asmHtml << "<div class='not-covered-line'>Not Executed</div>" << std::endl;
+    asmHtml << "<div class='not-stmt'>Not Stmt</div>" << std::endl;
+    asmHtml << "</details>" << std::endl;
+    asmHtml << "</div>" << std::endl;
+    asmHtml << "<div class='top-margin'>" << std::endl;
+    std::string reportFileName = makeReportFileName(filePath);
+    asmHtml << StringHelper::strprintf("<h4><a href='%s' class='link-report'>Show sorce file</a></h4>", reportFileName) << std::endl;
+    asmHtml << "<div class='top-margin'>" << std::endl;
+    INT32 prevLineNo = -1;
+    for (const auto & funcEntry : fileCodeCoverage.FuncCodeCoverageMap)
+    {
+        std::string funcName = funcEntry.first;
+        asmHtml << "<table cellPadding=0>" << std::endl;
+        asmHtml << "<h4>Function Name: " << funcName << "</h4>" << std::endl;
+        asmHtml << "<tbody>" << std::endl;
+        FuncCodeCoverage funcCodeCoverage = funcEntry.second;
+        for (const auto & addrEntry : funcCodeCoverage.AddrAsmMap)
+        {
+            ADDRINT addr = addrEntry.first;
+            std::string mnemonic = addrEntry.second;
+            if (funcCodeCoverage.InsCoveredMap[addr])
+            {
+                asmHtml << "<tr class='covered-line'>" << std::endl;
+            }
+            else
+            {
+                asmHtml << "<tr class='not-covered-line'>" << std::endl;
+            }
+            asmHtml << "    <td class='ins-addr'>" << "0x" << std::hex << addr << "</td>" << std::endl;
+            asmHtml << "    <td class='mnemonic'>" << std::endl;
+            asmHtml << "    <pre>" << encodeHtml(mnemonic) << "</pre>" << std::endl;
+            asmHtml << "    </td>" << std::endl;
+
+            bool showLine = false;
+            if (funcCodeCoverage.AddrLineMap.find(addr) != funcCodeCoverage.AddrLineMap.end())
+            {
+                INT32 lineNo = funcCodeCoverage.AddrLineMap[addr];
+                if (prevLineNo != lineNo)
+                {
+                    showLine = true;
+                    prevLineNo = lineNo;
+                    asmHtml << "    <td class='line-number'>";
+                    asmHtml << std::dec << lineNo << "</td>" << std::endl;
+                    asmHtml << "    <td class='code'>" << fileCodeCoverage.Lines[lineNo - 1].Text << "</td>" << std::endl;
+                }
+            }
+            if (!showLine)
+            {
+                asmHtml << "    <td class='line-number'></td>" << std::endl;
+                asmHtml << "    <td class='code'></td>" << std::endl;
+            }
+            asmHtml << "</tr>" << std::endl;
+        }
+        asmHtml << "</tbody>" << std::endl;
+        asmHtml << "</table>" << std::endl;
+    }
+
+    asmHtml << "</div>" << std::endl;
+    asmHtml << "</body>" << std::endl;
+    asmHtml << "</html>" << std::endl;
+    asmHtml.close();
+}
+
 VOID generateCoverageReport(INT32 code, VOID* v)
 {
     std::cout << "[CodeCoverage] Program trace Finished, generating Coverage report..." << std::endl;
@@ -400,15 +572,16 @@ VOID generateCoverageReport(INT32 code, VOID* v)
     }
 
     generateIndexHtml("report/index.html", s_targetName);
-    
+
     // generate each source file html
     for (auto &entry : s_fileCodeCoverageMap)
     {
         std::string sourceFilePath = entry.first;
         FileCodeCoverage &fileCodeCoverage = entry.second;
-        std::string reportFileName = makeReportFileName(sourceFilePath);
-        std::string reportFilePath = "report/" + reportFileName;
+        std::string reportFilePath    = "report/" + makeReportFileName(sourceFilePath);
+        std::string asmReportFilePath = "report/" + makeAsmReportFileName(sourceFilePath);
         generateSourceFileHtml(reportFilePath, sourceFilePath, fileCodeCoverage);
+        generateAsmHtml(asmReportFilePath, sourceFilePath, fileCodeCoverage);
     }
 
     std::cout << "[CodeCoverage] Coverage Report generated. Please check `report/index.html' using your browser." << std::endl;
