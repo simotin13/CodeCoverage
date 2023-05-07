@@ -7,9 +7,12 @@ This repository is a code coverage tool that utilizes [Pin](https://www.intel.co
 - GNU/Linux
 
 # How to use (Quick Start)
-Please download this repository.
+First, download this repository.
+```
+git clone git@github.com:simotin13/CodeCoverage.git
+```
 
-In addition, the Pin tool itself is required to run the code.
+Pin tool itself is required to run the code.
 You can download the Pin tool from the Intel Pin website.
 
 Scripts for downloading, building, and running examples are included in this repository. Please start by running `00_setup.sh.`
