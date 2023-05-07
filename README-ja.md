@@ -11,8 +11,11 @@ Pinのプラグインとして動作します。
 
 # Quick Start
 本レポジトリをダウンロードしてください。
+```
+git clone git@github.com:simotin13/CodeCoverage.git
+```
 
-また、実行にはPin本体が必要になります。
+実行にはPin本体が必要になります。
 Pin本体は[Intel Pin](https://www.intel.com/content/www/us/en/developer/articles/tool/pin-a-dynamic-binary-instrumentation-tool.html)のサイトからダウンロードする必要があります。
 
 ダウンロード＆ビルド、および実行例のスクリプトがこのレポジトリに含まれています。
