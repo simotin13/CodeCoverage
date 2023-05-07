@@ -54,3 +54,11 @@ To run this tool, execute the following command:
 
 where <target_module_path> and <target_args...> are the path and any arguments for the target module you want to measure code coverage for.
 
+# Note
+This coverage tool uses DWARF debugging information to obtain line number information.
+Pin 3.27 supports DWARF4 as debugging information. When building the application for which you want to measure coverage, please build it with the `-g` and `-gdwarf-4` options.
+
+例).
+```
+gcc -g -gdwarf-4 main.c
+```
