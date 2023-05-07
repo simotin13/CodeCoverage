@@ -8,7 +8,7 @@ Pinのプラグインとして動作します。
 - GNU/Linux
 
 # 使い方(Quick Start)
-本レポジトリをダウンロードしてください。
+本レポジトリをクローンしてください。
 ```
 git clone git@github.com:simotin13/CodeCoverage.git
 ```
