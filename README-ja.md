@@ -7,9 +7,7 @@ Pinのプラグインとして動作します。
 # サポートしているプラットフォーム
 - GNU/Linux
 
-# 使い方
-
-# Quick Start
+# 使い方(Quick Start)
 本レポジトリをダウンロードしてください。
 ```
 git clone git@github.com:simotin13/CodeCoverage.git
