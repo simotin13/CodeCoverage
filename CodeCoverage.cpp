@@ -49,7 +49,9 @@ static std::string s_targetName;
 static std::map<std::string, FileCodeCoverage> s_fileCodeCoverageMap;
 static std::map<std::string, std::string> s_funcFileMap;
 
-static void initializeCovorage(IMG img, void *v)
+static std::map<ADDRINT, std::string> s_addrFuncNameMap;
+
+static void ImageLoad(IMG img, void *v)
 {
     if (!IMG_Valid(img))
     {
@@ -111,6 +113,7 @@ static void initializeCovorage(IMG img, void *v)
                 ifs.close();
 
                 s_fileCodeCoverageMap[filePath] = fileCodeCoverage;
+
             }
 
             FuncCodeCoverage funcCodeCoverage;
@@ -120,6 +123,8 @@ static void initializeCovorage(IMG img, void *v)
             {
                 addr = INS_Address(ins);
                 PIN_GetSourceLocation(addr, &col, &line, &filePath);
+
+                s_addrFuncNameMap[addr] = funcName;
 
                 // set executable line
                 // note that line number start from 1
@@ -144,20 +149,13 @@ static void initializeCovorage(IMG img, void *v)
     return;
 }
 
-VOID updateCoverage(INS ins, VOID* v)
+static VOID updateCoverage(ADDRINT addr)
 {
-    ADDRINT addr = INS_Address(ins);
-    std::string funcName = RTN_FindNameByAddress(addr);
-    if (funcName == "")
+    if (s_addrFuncNameMap.find(addr) == s_addrFuncNameMap.end())
     {
         return;
     }
-
-    if (s_funcFileMap.find(funcName) == s_funcFileMap.end())
-    {
-        return;
-    } 
-
+    std::string funcName = s_addrFuncNameMap[addr];
     std::string filePath = s_funcFileMap[funcName];
     if (s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap.find(funcName) == s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap.end())
     {
@@ -558,7 +556,35 @@ void generateAsmHtml(std::string asmReportFilePath, std::string filePath, const 
     asmHtml.close();
 }
 
-VOID generateCoverageReport(INT32 code, VOID* v)
+static VOID Instruction(INS ins, VOID *v)
+{
+    ADDRINT addr = INS_Address(ins);
+    std::string funcName = RTN_FindNameByAddress(addr);
+    if (funcName == "")
+    {
+        return;
+    }
+
+    if (s_funcFileMap.find(funcName) == s_funcFileMap.end())
+    {
+        return;
+    }
+
+    std::string filePath = s_funcFileMap[funcName];
+    if (s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap.find(funcName) == s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap.end())
+    {
+        return;
+    }
+
+    if (s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].AddrLineMap.find(addr) == s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName].AddrLineMap.end())
+    {
+        return;
+    }
+
+    INS_InsertCall(ins, IPOINT_BEFORE, (AFUNPTR)updateCoverage, IARG_ADDRINT, addr, IARG_END);
+}
+
+VOID Fini(INT32 code, VOID* v)
 {
     std::cout << "[CodeCoverage] Program trace Finished, generating Coverage report..." << std::endl;
 
@@ -596,9 +622,9 @@ int main(int argc, char **argv)
         std::exit(EXIT_FAILURE);
     }
 
-    IMG_AddInstrumentFunction(initializeCovorage, NULL);
-    INS_AddInstrumentFunction(updateCoverage, NULL);
-    PIN_AddFiniFunction(generateCoverageReport, 0);
+    IMG_AddInstrumentFunction(ImageLoad, 0);
+    INS_AddInstrumentFunction(Instruction, 0);
+    PIN_AddFiniFunction(Fini, 0);
 
     std::cout << "[CodeCoverage] Program trace Start" << std::endl;
 
