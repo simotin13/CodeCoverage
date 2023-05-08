@@ -24,6 +24,26 @@ struct FuncInfo
     UINT32 Size;
 };
 
+struct InsInfo
+{
+    ADDRINT Addr;
+    OPCODE Opecode;
+    UINT32 OperandCount;
+    bool IsBranch;
+    bool IsUnconditionalBranch;
+    bool IsConditionalBranch;
+    bool IsEffectsEFlags;
+    std::vector<std::string> AffectedFlags;
+    std::string Disassemble;
+};
+
+struct BasicBlockInfo
+{
+    ADDRINT Start;
+    bool Executed;
+    std::vector<INS> InsList;
+};
+
 struct FuncCodeCoverage
 {
     std::string Name;
@@ -31,6 +51,7 @@ struct FuncCodeCoverage
     std::map<ADDRINT, std::string> AddrAsmMap;
     std::map<INT32, bool> LineCoveredMap;
     std::map<ADDRINT, bool> InsCoveredMap;
+    std::vector<BasicBlockInfo> BasicBlocks;
     UINT32 TotalLineCount;
     UINT32 CoveredLineCount;
 };
@@ -47,8 +68,8 @@ struct FileCodeCoverage
 // =====================================================================
 static std::string s_targetName;
 static std::map<std::string, FileCodeCoverage> s_fileCodeCoverageMap;
-static std::map<std::string, std::string> s_funcFileMap;
 
+static std::map<std::string, std::string> s_funcFileMap;
 static std::map<ADDRINT, std::string> s_addrFuncNameMap;
 
 static void ImageLoad(IMG img, void *v)
@@ -119,8 +140,27 @@ static void ImageLoad(IMG img, void *v)
             FuncCodeCoverage funcCodeCoverage;
             const std::string &funcName = RTN_Name(rtn);
             RTN_Open(rtn);
+
+            BasicBlockInfo basicBlockInfo;
+            basicBlockInfo.Executed = false;
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
+                if (INS_IsDirectControlFlow(ins))
+                {
+                    ADDRINT addr = INS_Address(ins);
+                    std::string disassemble = INS_Disassemble(ins);
+                    std::cout << StringHelper::strprintf("%s:0x%lx %s", funcName, addr, disassemble) << std::endl;
+                }
+                #if 0
+                if (funcName == "add")
+                {
+                    ADDRINT addr = INS_Address(ins);
+                    std::string disassemble = INS_Disassemble(ins);
+                    std::cout << StringHelper::strprintf("%s:0x%lx %s", funcName, addr, disassemble) << std::endl;
+                }
+                #endif
+                basicBlockInfo.InsList.push_back(ins);
+
                 addr = INS_Address(ins);
                 PIN_GetSourceLocation(addr, &col, &line, &filePath);
 
@@ -139,6 +179,7 @@ static void ImageLoad(IMG img, void *v)
 
             funcCodeCoverage.TotalLineCount = funcCodeCoverage.LineCoveredMap.size();
             funcCodeCoverage.CoveredLineCount = 0;
+            funcCodeCoverage.BasicBlocks.push_back(basicBlockInfo);
             RTN_Close(rtn);
 
             s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName] = funcCodeCoverage;
@@ -556,6 +597,36 @@ void generateAsmHtml(std::string asmReportFilePath, std::string filePath, const 
     asmHtml.close();
 }
 
+static VOID analyzeResult(VOID)
+{
+#if 0
+    // generate each source file html
+    for (auto &entry : s_fileCodeCoverageMap)
+    {
+        std::string sourceFilePath = entry.first;
+        FileCodeCoverage fileCodeCoverage = entry.second;
+        
+        for (auto &funcEntry : fileCodeCoverage.FuncCodeCoverageMap)
+        {
+            std::string funcName = funcEntry.first;
+            FuncCodeCoverage funcCodeCoverage = funcEntry.second;
+            for (auto &basicBlock : funcCodeCoverage.BasicBlocks)
+            {
+                for (auto &ins : basicBlock.InsList)
+                {
+                    ADDRINT addr = INS_Address(ins);
+                    std::string nemonic = INS_Mnemonic(ins);
+                    std::string disassemble = INS_Disassemble(ins);
+                    std::cout << StringHelper::strprintf("%s:0x%lx %s %s", funcName, addr, nemonic, disassemble) << std::endl;
+                }
+            break;
+            }
+        }
+    }
+#endif
+    return;
+}
+
 static VOID Instruction(INS ins, VOID *v)
 {
     ADDRINT addr = INS_Address(ins);
@@ -587,6 +658,8 @@ static VOID Instruction(INS ins, VOID *v)
 VOID Fini(INT32 code, VOID* v)
 {
     std::cout << "[CodeCoverage] Program trace Finished, generating Coverage report..." << std::endl;
+
+    analyzeResult();
 
     // generate index.html
     struct stat st;
