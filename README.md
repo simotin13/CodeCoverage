@@ -7,7 +7,7 @@ This repository is a code coverage tool that utilizes [Pin](https://www.intel.co
 - GNU/Linux
 
 # How to use (Quick Start)
-First, download this repository.
+First, clone this repository.
 ```
 git clone git@github.com:simotin13/CodeCoverage.git
 ```
