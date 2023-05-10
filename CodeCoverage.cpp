@@ -27,7 +27,7 @@ struct FuncInfo
 struct InsInfo
 {
     ADDRINT Addr;
-    OPCODE Opecode;
+    OPCODE Opcode;
     UINT32 OperandCount;
     bool IsBranch;
     bool IsUnconditionalBranch;
@@ -71,6 +71,42 @@ static std::map<std::string, FileCodeCoverage> s_fileCodeCoverageMap;
 
 static std::map<std::string, std::string> s_funcFileMap;
 static std::map<ADDRINT, std::string> s_addrFuncNameMap;
+
+static void makeInsInfo(INS ins, InsInfo &insInfo)
+{
+    OPCODE opcode = INS_Opcode(ins);
+    insInfo.Opcode = opcode;
+    insInfo.OperandCount = INS_OperandCount(ins);
+    insInfo.Addr = INS_Address(ins);
+    insInfo.Disassemble = INS_Disassemble(ins);
+    switch (opcode)
+    {
+
+    case XED_ICLASS_JNLE:
+    {
+        insInfo.IsBranch = true;
+        insInfo.IsUnconditionalBranch = false;
+        insInfo.IsConditionalBranch = true;
+        insInfo.IsEffectsEFlags = false;
+    }
+        break;
+    default:
+    {
+        std::cerr << "Unknown opcode: " << opcode << std::endl;
+        assert(false);
+    }
+        break;
+    }
+
+    insInfo.Opcode = INS_Opcode(ins);
+
+    insInfo.IsBranch = false;
+    insInfo.IsUnconditionalBranch = false;
+    insInfo.IsConditionalBranch = true;
+    insInfo.IsEffectsEFlags = false;
+    insInfo.Disassemble = INS_Disassemble(ins);
+
+}
 
 static void ImageLoad(IMG img, void *v)
 {
@@ -145,11 +181,10 @@ static void ImageLoad(IMG img, void *v)
             basicBlockInfo.Executed = false;
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
-                if (INS_IsDirectControlFlow(ins))
+                InsInfo insInfo;
+                if (INS_Category(ins) == XED_CATEGORY_COND_BR)
                 {
-                    ADDRINT addr = INS_Address(ins);
-                    std::string disassemble = INS_Disassemble(ins);
-                    std::cout << StringHelper::strprintf("%s:0x%lx %s", funcName, addr, disassemble) << std::endl;
+                    makeInsInfo(ins, insInfo);
                 }
                 #if 0
                 if (funcName == "add")
