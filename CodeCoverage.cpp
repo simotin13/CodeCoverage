@@ -81,6 +81,49 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
     insInfo.Disassemble = INS_Disassemble(ins);
     switch (opcode)
     {
+    case XED_ICLASS_PUSH:
+    {
+        assert(false);
+    }
+    break;
+
+    case XED_ICLASS_CALL_NEAR:
+    {
+        assert(false);
+    }
+    break;
+    case XED_ICLASS_RET_NEAR:
+    {
+        assert(false);
+    }
+    break;
+
+    case XED_ICLASS_LEA:
+    {
+        assert(false);
+    }
+    break;
+
+    case XED_ICLASS_ADD:
+    {
+        assert(false);
+    }
+    break;
+    case XED_ICLASS_SUB:
+    {
+        assert(false);
+    }
+    break;
+    case XED_ICLASS_MOV:
+    {
+        assert(false);
+    }
+    break;
+    case XED_ICLASS_CMP:
+    {
+        assert(false);
+    }
+    break;
 
     case XED_ICLASS_JNLE:
     {
@@ -89,13 +132,14 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
         insInfo.IsConditionalBranch = true;
         insInfo.IsEffectsEFlags = false;
     }
-        break;
+    break;
+
     default:
     {
         std::cerr << "Unknown opcode: " << opcode << std::endl;
         assert(false);
     }
-        break;
+    break;
     }
 
     insInfo.Opcode = INS_Opcode(ins);
