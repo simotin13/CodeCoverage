@@ -9,6 +9,19 @@
 #include "pin.H"
 #include "util.h"
 
+struct EFLAGS
+{    
+    bool OF;    // Overflow Flag(1: overflow, 0: no overflow)
+    bool DF;    // Direction Flag(1: down, 0: up)
+    bool IF;    // Interrupt Enable Flag(1: enabled, 0: disabled )
+    bool TF;    // Trap Flag (1: single step, 0: normal)
+    bool SF;    // Sign Flag (1: negative, 0: positive)
+    bool ZF;    // Zero Flag (1: zero, 0: non-zero)
+    bool AF;    // Auxiliary Carry Flag (1: carry, 0: no carry)
+    bool PF;    // Parity Flag (1: even, 0: odd)
+    bool CF;    // Carry Flag (1: carry, 0: no carry)
+};
+
 struct LineInfo
 {
     UINT32 LineNumber;
@@ -72,6 +85,7 @@ static std::map<std::string, FileCodeCoverage> s_fileCodeCoverageMap;
 static std::map<std::string, std::string> s_funcFileMap;
 static std::map<ADDRINT, std::string> s_addrFuncNameMap;
 
+#if 0
 static void makeInsInfo(INS ins, InsInfo &insInfo)
 {
     OPCODE opcode = INS_Opcode(ins);
@@ -111,6 +125,13 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
     break;
     case XED_ICLASS_SUB:
     {
+        // P409
+        // Subtracts the second operand (source operand) from the first operand and stores the result in the destination operand
+        // The destination operand can be a register or a memory location; the source operand can be an immediate, register, or memory location.
+        // (However, two memory operands cannot be used in one instruction.)
+        // When an immediate value is used as an operand, it is sign-extended to the length of the destination operand format.
+        // Flags Affected
+        // The OF, SF, ZF, AF, PF, and CF flags are set according to the result.
         assert(false);
     }
     break;
@@ -121,12 +142,19 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
     break;
     case XED_ICLASS_CMP:
     {
+        // P289
+
+        // check dst operand, src operand
+        // operand dst: memory or register
+        // operand src: register or immediate
+        // savke address and register
         assert(false);
     }
     break;
 
     case XED_ICLASS_JNLE:
     {
+        // ZF = 0 & SF = OF
         insInfo.IsBranch = true;
         insInfo.IsUnconditionalBranch = false;
         insInfo.IsConditionalBranch = true;
@@ -151,6 +179,7 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
     insInfo.Disassemble = INS_Disassemble(ins);
 
 }
+#endif
 
 static void ImageLoad(IMG img, void *v)
 {
@@ -225,12 +254,16 @@ static void ImageLoad(IMG img, void *v)
             basicBlockInfo.Executed = false;
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
+                #if 0
+                UINT32 operandCnt = INS_OperandCount(ins);
+                // UINT64 v = INS_OperandImmediate(ins, 1);
+                std::string disassemble = INS_Disassemble(ins);
+                std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
                 InsInfo insInfo;
                 if (INS_Category(ins) == XED_CATEGORY_COND_BR)
                 {
                     makeInsInfo(ins, insInfo);
                 }
-                #if 0
                 if (funcName == "add")
                 {
                     ADDRINT addr = INS_Address(ins);
@@ -713,6 +746,31 @@ static VOID Instruction(INS ins, VOID *v)
     if (funcName == "")
     {
         return;
+    }
+
+    UINT32 operandCnt = INS_OperandCount(ins);
+    // UINT64 v = INS_OperandImmediate(ins, 1);
+    std::string disassemble = INS_Disassemble(ins);
+    std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
+    for (UINT32 op = 0; op < INS_OperandCount(ins); op++)
+    {
+        if (INS_OperandIsImplicit(ins,op))
+        {
+            std::cerr << "Implicit: " << std::endl;
+        }
+        if (INS_OperandIsReg(ins,op))
+        {
+            std::cerr << "IsReg: " << std::endl;
+        }
+        
+        if (INS_OperandIsImmediate(ins, op))
+        {
+            std::cerr << "Immediate: " << std::hex << INS_OperandImmediate(ins, op) << std::endl;
+        }
+        if (INS_OperandIsMemory(ins, op))
+        {
+            std::cerr << "Memory: " << std::endl;
+        }
     }
 
     if (s_funcFileMap.find(funcName) == s_funcFileMap.end())
