@@ -45,7 +45,7 @@ struct InsInfo
     bool IsBranch;
     bool IsUnconditionalBranch;
     bool IsConditionalBranch;
-    bool IsEffectsEFlags;
+    bool EffectsEFlags;
     std::vector<std::string> AffectedFlags;
     std::string Disassemble;
 };
@@ -54,7 +54,8 @@ struct BasicBlockInfo
 {
     ADDRINT Start;
     bool Executed;
-    std::vector<INS> InsList;
+    std::vector<InsInfo> InsList;
+    std::vector<ADDRINT> nextBlockAddrList;
 };
 
 struct FuncCodeCoverage
@@ -85,7 +86,24 @@ static std::map<std::string, FileCodeCoverage> s_fileCodeCoverageMap;
 static std::map<std::string, std::string> s_funcFileMap;
 static std::map<ADDRINT, std::string> s_addrFuncNameMap;
 
-#if 0
+static bool isBlockEnd(INS ins)
+{
+    INT32 category = INS_Category(ins);
+    if (category == XED_CATEGORY_COND_BR)
+    {
+        return true;
+    }
+    if (category == XED_CATEGORY_CALL)
+    {
+        return true;
+    }
+    if (category == XED_CATEGORY_RET )
+    {
+        return true;
+    }
+    return false;
+}
+
 static void makeInsInfo(INS ins, InsInfo &insInfo)
 {
     OPCODE opcode = INS_Opcode(ins);
@@ -95,6 +113,18 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
     insInfo.Disassemble = INS_Disassemble(ins);
     switch (opcode)
     {
+    case XED_ICLASS_NOP:
+    {
+        insInfo.IsBranch = true;
+        insInfo.IsUnconditionalBranch = false;
+        insInfo.IsConditionalBranch = true;
+        insInfo.EffectsEFlags = false;
+    }
+    break;
+    {
+        assert(false);
+    }
+    break;
     case XED_ICLASS_PUSH:
     {
         assert(false);
@@ -158,7 +188,7 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
         insInfo.IsBranch = true;
         insInfo.IsUnconditionalBranch = false;
         insInfo.IsConditionalBranch = true;
-        insInfo.IsEffectsEFlags = false;
+        insInfo.EffectsEFlags = false;
     }
     break;
 
@@ -175,11 +205,11 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
     insInfo.IsBranch = false;
     insInfo.IsUnconditionalBranch = false;
     insInfo.IsConditionalBranch = true;
-    insInfo.IsEffectsEFlags = false;
+    insInfo.EffectsEFlags = false;
     insInfo.Disassemble = INS_Disassemble(ins);
 
 }
-#endif
+
 
 static void ImageLoad(IMG img, void *v)
 {
@@ -254,25 +284,6 @@ static void ImageLoad(IMG img, void *v)
             basicBlockInfo.Executed = false;
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
-                #if 0
-                UINT32 operandCnt = INS_OperandCount(ins);
-                // UINT64 v = INS_OperandImmediate(ins, 1);
-                std::string disassemble = INS_Disassemble(ins);
-                std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
-                InsInfo insInfo;
-                if (INS_Category(ins) == XED_CATEGORY_COND_BR)
-                {
-                    makeInsInfo(ins, insInfo);
-                }
-                if (funcName == "add")
-                {
-                    ADDRINT addr = INS_Address(ins);
-                    std::string disassemble = INS_Disassemble(ins);
-                    std::cout << StringHelper::strprintf("%s:0x%lx %s", funcName, addr, disassemble) << std::endl;
-                }
-                #endif
-                basicBlockInfo.InsList.push_back(ins);
-
                 addr = INS_Address(ins);
                 PIN_GetSourceLocation(addr, &col, &line, &filePath);
 
@@ -287,11 +298,23 @@ static void ImageLoad(IMG img, void *v)
                 funcCodeCoverage.LineCoveredMap[line]   = false;
                 funcCodeCoverage.InsCoveredMap[addr]    = false;
                 funcCodeCoverage.AddrAsmMap[addr]       = INS_Disassemble(ins);
+
+                UINT32 operandCnt = INS_OperandCount(ins);
+                // UINT64 v = INS_OperandImmediate(ins, 1);
+                std::string disassemble = INS_Disassemble(ins);
+                std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
+                InsInfo insInfo;
+                makeInsInfo(ins, insInfo);
+                basicBlockInfo.InsList.push_back(insInfo);
+                if (isBlockEnd(ins))
+                {
+                    funcCodeCoverage.BasicBlocks.push_back(basicBlockInfo);
+                    basicBlockInfo = BasicBlockInfo();
+                }
             }
 
             funcCodeCoverage.TotalLineCount = funcCodeCoverage.LineCoveredMap.size();
             funcCodeCoverage.CoveredLineCount = 0;
-            funcCodeCoverage.BasicBlocks.push_back(basicBlockInfo);
             RTN_Close(rtn);
 
             s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName] = funcCodeCoverage;
