@@ -80,26 +80,33 @@ public:
     REG Reg;
 };
 
-class InsInfoBase
+class InsInfo
 {
 public:
     InsType Type;
     ADDRINT Addr;
+    USIZE Size;
     std::string Disassemble;
     ADDRINT NextAddr;
     OPCODE Opcode;
     std::vector<Operand *> Operands;
+
+public:
+    virtual ADDRINT Execute(EFlags &eflags)
+    {
+        return Addr + Size;
+    }
 };
 
-class InsCmp : public InsInfoBase
+class InsCmp : public InsInfo
 {
 public:
 };
 
-class InsJnle : public InsInfoBase
+class InsJnle : public InsInfo
 {
 public:
-    ADDRINT GetBranchAddr(const EFlags &eflags)
+    ADDRINT GetBranchAddr(EFlags &eflags)
     {
         ADDRINT branchAddr = NextAddr;
         if (eflags.ZF == 0 && eflags.SF)
@@ -114,7 +121,7 @@ struct BasicBlockInfo
 {
     ADDRINT Start;
     bool Executed;
-    std::vector<InsInfoBase *> InsList;
+    std::vector<InsInfo *> InsList;
     std::vector<ADDRINT> nextBlockAddrList;
 };
 
@@ -164,22 +171,16 @@ static bool isBlockEnd(INS ins)
     return false;
 }
 
-static void makeInsInfo(INS ins, InsInfoBase *pInsInfo)
+static InsInfo *makeInsInfo(INS ins)
 {
+    InsInfo *pInsInfo;
     OPCODE opcode = INS_Opcode(ins);
-    pInsInfo->Opcode = opcode;
-    pInsInfo->Addr = INS_Address(ins);
-    pInsInfo->Disassemble = INS_Disassemble(ins);
     switch (opcode)
     {
     case XED_ICLASS_NOP:
     {
-        #if 0
-        insInfo.IsBranch = true;
-        insInfo.IsUnconditionalBranch = false;
-        insInfo.IsConditionalBranch = true;
-        insInfo.EffectsEFlags = false;
-        #endif
+        pInsInfo = new InsInfo();
+        pInsInfo->Type = InsType::Other;
     }
     break;
     {
@@ -232,6 +233,8 @@ static void makeInsInfo(INS ins, InsInfoBase *pInsInfo)
     case XED_ICLASS_CMP:
     {
         // P289
+        pInsInfo = new InsInfo();
+        pInsInfo->Type = InsType::Other;
 
         // check dst operand, src operand
         // operand dst: memory or register
@@ -301,17 +304,11 @@ static void makeInsInfo(INS ins, InsInfoBase *pInsInfo)
     break;
     }
 
-    pInsInfo->Opcode = INS_Opcode(ins);
-
-#if 0
-    insInfo.IsBranch = false;
-    insInfo.IsUnconditionalBranch = false;
-    insInfo.IsConditionalBranch = true;
-    insInfo.EffectsEFlags = false;
-    insInfo.Disassemble = INS_Disassemble(ins);
-#endif
-
-
+    pInsInfo->Opcode = opcode;
+    pInsInfo->Addr = INS_Address(ins);
+    pInsInfo->Size = INS_Size(ins);
+    pInsInfo->Disassemble = INS_Disassemble(ins);
+    return pInsInfo;
 }
 
 
@@ -407,8 +404,7 @@ static void ImageLoad(IMG img, void *v)
                 // UINT64 v = INS_OperandImmediate(ins, 1);
                 std::string disassemble = INS_Disassemble(ins);
                 std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
-                InsInfoBase *pInsInfo = new InsInfoBase();
-                makeInsInfo(ins, pInsInfo);
+                InsInfo *pInsInfo = makeInsInfo(ins);
                 basicBlockInfo.InsList.push_back(pInsInfo);
                 if (isBlockEnd(ins))
                 {
