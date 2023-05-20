@@ -9,7 +9,7 @@
 #include "pin.H"
 #include "util.h"
 
-struct EFLAGS
+struct EFlags
 {    
     bool OF;    // Overflow Flag(1: overflow, 0: no overflow)
     bool DF;    // Direction Flag(1: down, 0: up)
@@ -37,24 +37,84 @@ struct FuncInfo
     UINT32 Size;
 };
 
-struct InsInfo
+enum class InsType
 {
+    BranchOrCall,
+    Ret,
+    Other
+};
+
+enum class OperandType
+{
+    Reg,
+    Memory,
+    Immediate
+};
+
+class Operand
+{
+public:
+    OperandType Type;
+    bool IsRead;
+    bool IsWrite;
+    bool IsSrc;
+    bool IsDst;
+};
+
+class MemoryOperand : public Operand
+{
+public:
+    REG BaseReg;
+    INT32 offset;
+};
+
+class ImmediateOperand : public Operand
+{
+public:
+    INT64 ImmediateValue;
+};
+
+class RegOperand : public Operand
+{
+public:
+    REG Reg;
+};
+
+class InsInfoBase
+{
+public:
+    InsType Type;
     ADDRINT Addr;
-    OPCODE Opcode;
-    UINT32 OperandCount;
-    bool IsBranch;
-    bool IsUnconditionalBranch;
-    bool IsConditionalBranch;
-    bool EffectsEFlags;
-    std::vector<std::string> AffectedFlags;
     std::string Disassemble;
+    ADDRINT NextAddr;
+    OPCODE Opcode;
+    std::vector<Operand *> Operands;
+};
+
+class InsCmp : public InsInfoBase
+{
+public:
+};
+
+class InsJnle : public InsInfoBase
+{
+public:
+    ADDRINT GetBranchAddr(const EFlags &eflags)
+    {
+        ADDRINT branchAddr = NextAddr;
+        if (eflags.ZF == 0 && eflags.SF)
+        {
+            //branchAddr = Operands[0]->ImmediateValue;
+        }
+        return branchAddr;
+    }
 };
 
 struct BasicBlockInfo
 {
     ADDRINT Start;
     bool Executed;
-    std::vector<InsInfo> InsList;
+    std::vector<InsInfoBase *> InsList;
     std::vector<ADDRINT> nextBlockAddrList;
 };
 
@@ -104,21 +164,22 @@ static bool isBlockEnd(INS ins)
     return false;
 }
 
-static void makeInsInfo(INS ins, InsInfo &insInfo)
+static void makeInsInfo(INS ins, InsInfoBase *pInsInfo)
 {
     OPCODE opcode = INS_Opcode(ins);
-    insInfo.Opcode = opcode;
-    insInfo.OperandCount = INS_OperandCount(ins);
-    insInfo.Addr = INS_Address(ins);
-    insInfo.Disassemble = INS_Disassemble(ins);
+    pInsInfo->Opcode = opcode;
+    pInsInfo->Addr = INS_Address(ins);
+    pInsInfo->Disassemble = INS_Disassemble(ins);
     switch (opcode)
     {
     case XED_ICLASS_NOP:
     {
+        #if 0
         insInfo.IsBranch = true;
         insInfo.IsUnconditionalBranch = false;
         insInfo.IsConditionalBranch = true;
         insInfo.EffectsEFlags = false;
+        #endif
     }
     break;
     {
@@ -127,7 +188,6 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
     break;
     case XED_ICLASS_PUSH:
     {
-        assert(false);
     }
     break;
 
@@ -162,14 +222,13 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
         // When an immediate value is used as an operand, it is sign-extended to the length of the destination operand format.
         // Flags Affected
         // The OF, SF, ZF, AF, PF, and CF flags are set according to the result.
-        assert(false);
     }
     break;
     case XED_ICLASS_MOV:
     {
-        assert(false);
     }
     break;
+
     case XED_ICLASS_CMP:
     {
         // P289
@@ -178,17 +237,59 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
         // operand dst: memory or register
         // operand src: register or immediate
         // savke address and register
+        UINT32 cnt = INS_OperandCount(ins);
+        printf("INS_OperandCount: %d\n", cnt);
+        for(UINT32 i = 0; i < cnt; i++)
+        {
+            if (INS_OperandRead(ins, i))
+            {
+                // read operand
+                printf("%d:read operand\n", i);
+            }
+            if (INS_OperandWritten(ins, i))
+            {
+                // write operand
+                printf("%d:write operand\n", i);
+            }
+            if(INS_OperandIsMemory(ins, i))
+            {
+                // memory operand
+                // save memory address
+                printf("memory operand\n");
+                ADDRDELTA displacement = INS_OperandMemoryDisplacement(ins, i);
+                REG baseReg      = INS_OperandMemoryBaseReg(ins, i);
+                std::cout << REG_StringShort(baseReg) << std::endl;
+                std::cout << displacement << std::endl;
+            }
+            else if(INS_OperandIsReg(ins, i))
+            {
+                // register operand
+                // save register
+                REG src = INS_OperandReg(ins, i);
+                printf("register operand\n");
+                std::cout << REG_StringShort(src) << std::endl;
+            }
+            else if(INS_OperandIsImmediate(ins, i))
+            {
+                // immediate operand
+                // save immediate value
+                printf("immediate operand\n");
+                std::cout << INS_OperandImmediate(ins, i) << std::endl;
+            }
+        }
         assert(false);
     }
     break;
 
     case XED_ICLASS_JNLE:
     {
+        #if 0
         // ZF = 0 & SF = OF
         insInfo.IsBranch = true;
         insInfo.IsUnconditionalBranch = false;
         insInfo.IsConditionalBranch = true;
         insInfo.EffectsEFlags = false;
+        #endif
     }
     break;
 
@@ -200,13 +301,16 @@ static void makeInsInfo(INS ins, InsInfo &insInfo)
     break;
     }
 
-    insInfo.Opcode = INS_Opcode(ins);
+    pInsInfo->Opcode = INS_Opcode(ins);
 
+#if 0
     insInfo.IsBranch = false;
     insInfo.IsUnconditionalBranch = false;
     insInfo.IsConditionalBranch = true;
     insInfo.EffectsEFlags = false;
     insInfo.Disassemble = INS_Disassemble(ins);
+#endif
+
 
 }
 
@@ -303,9 +407,9 @@ static void ImageLoad(IMG img, void *v)
                 // UINT64 v = INS_OperandImmediate(ins, 1);
                 std::string disassemble = INS_Disassemble(ins);
                 std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
-                InsInfo insInfo;
-                makeInsInfo(ins, insInfo);
-                basicBlockInfo.InsList.push_back(insInfo);
+                InsInfoBase *pInsInfo = new InsInfoBase();
+                makeInsInfo(ins, pInsInfo);
+                basicBlockInfo.InsList.push_back(pInsInfo);
                 if (isBlockEnd(ins))
                 {
                     funcCodeCoverage.BasicBlocks.push_back(basicBlockInfo);
