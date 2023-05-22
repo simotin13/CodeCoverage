@@ -187,25 +187,30 @@ static InsInfo *makeInsInfo(INS ins)
         assert(false);
     }
     break;
+    
     case XED_ICLASS_PUSH:
+    {
+    }
+    break;
+
+    case XED_ICLASS_LEAVE:
     {
     }
     break;
 
     case XED_ICLASS_CALL_NEAR:
     {
-        assert(false);
+        printf("call...\n");
     }
     break;
     case XED_ICLASS_RET_NEAR:
     {
-        assert(false);
     }
     break;
 
     case XED_ICLASS_LEA:
     {
-        assert(false);
+        printf("XED_ICLASS_LEA\n");
     }
     break;
 
@@ -227,11 +232,13 @@ static InsInfo *makeInsInfo(INS ins)
     break;
     case XED_ICLASS_MOV:
     {
+        printf("mov...\n");
     }
     break;
 
     case XED_ICLASS_CMP:
     {
+        printf("cmp...\n");
         // P289
         pInsInfo = new InsInfo();
         pInsInfo->Type = InsType::Other;
@@ -241,8 +248,50 @@ static InsInfo *makeInsInfo(INS ins)
         // operand src: register or immediate
         // savke address and register
         UINT32 cnt = INS_OperandCount(ins);
-        printf("INS_OperandCount: %d\n", cnt);
-        for(UINT32 i = 0; i < cnt; i++)
+        for (UINT32 i = 0; i < cnt; i++)
+        {
+            if (INS_OperandRead(ins, i))
+            {
+                // read operand
+            }
+            if (INS_OperandWritten(ins, i))
+            {
+                // write operand
+            }
+            if(INS_OperandIsMemory(ins, i))
+            {
+                // memory operand
+                // save memory address
+                ADDRDELTA displacement = INS_OperandMemoryDisplacement(ins, i);
+                REG baseReg      = INS_OperandMemoryBaseReg(ins, i);
+                std::cout << REG_StringShort(baseReg) << std::endl;
+                std::cout << displacement << std::endl;
+            }
+            else if(INS_OperandIsReg(ins, i))
+            {
+                // register operand
+                // save register
+            }
+            else if(INS_OperandIsImmediate(ins, i))
+            {
+            }
+        }
+    }
+    break;
+
+    case XED_ICLASS_JMP:
+    {
+
+    }
+    break;
+
+    case XED_ICLASS_JNLE:
+    {
+        pInsInfo = new InsJnle();
+        pInsInfo->Type = InsType::BranchOrCall;
+        UINT32 cnt = INS_OperandCount(ins);
+        printf("!!! INS_OperandCount: %d\n", cnt);
+        for (UINT32 i = 0; i < cnt; i++)
         {
             if (INS_OperandRead(ins, i))
             {
@@ -280,19 +329,7 @@ static InsInfo *makeInsInfo(INS ins)
                 std::cout << INS_OperandImmediate(ins, i) << std::endl;
             }
         }
-        assert(false);
-    }
-    break;
 
-    case XED_ICLASS_JNLE:
-    {
-        #if 0
-        // ZF = 0 & SF = OF
-        insInfo.IsBranch = true;
-        insInfo.IsUnconditionalBranch = false;
-        insInfo.IsConditionalBranch = true;
-        insInfo.EffectsEFlags = false;
-        #endif
     }
     break;
 
@@ -400,16 +437,13 @@ static void ImageLoad(IMG img, void *v)
                 funcCodeCoverage.InsCoveredMap[addr]    = false;
                 funcCodeCoverage.AddrAsmMap[addr]       = INS_Disassemble(ins);
 
-                UINT32 operandCnt = INS_OperandCount(ins);
                 // UINT64 v = INS_OperandImmediate(ins, 1);
-                std::string disassemble = INS_Disassemble(ins);
-                std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
                 InsInfo *pInsInfo = makeInsInfo(ins);
                 basicBlockInfo.InsList.push_back(pInsInfo);
                 if (isBlockEnd(ins))
                 {
-                    funcCodeCoverage.BasicBlocks.push_back(basicBlockInfo);
-                    basicBlockInfo = BasicBlockInfo();
+                    //funcCodeCoverage.BasicBlocks.push_back(basicBlockInfo);
+                    //basicBlockInfo = BasicBlockInfo();
                 }
             }
 
