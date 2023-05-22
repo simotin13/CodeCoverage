@@ -12,6 +12,9 @@ popd
 pushd .
 cd examples/c_function_call
 make
+cd ../simple_branch
+make
+
 popd
 
 # run code coverage tool
