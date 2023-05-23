@@ -109,7 +109,7 @@ public:
     ADDRINT GetBranchAddr(EFlags &eflags)
     {
         ADDRINT branchAddr = NextAddr;
-        if (eflags.ZF == 0 && eflags.SF)
+        if (eflags.ZF == 0 && (eflags.SF == eflags.OF))
         {
             //branchAddr = Operands[0]->ImmediateValue;
         }
@@ -287,6 +287,7 @@ static InsInfo *makeInsInfo(INS ins)
 
     case XED_ICLASS_JNLE:
     {
+        printf("jnle ...\n");
         pInsInfo = new InsJnle();
         pInsInfo->Type = InsType::BranchOrCall;
         UINT32 cnt = INS_OperandCount(ins);
@@ -313,6 +314,30 @@ static InsInfo *makeInsInfo(INS ins)
                 std::cout << REG_StringShort(baseReg) << std::endl;
                 std::cout << displacement << std::endl;
             }
+            else if (INS_OperandIsAddressGenerator(ins, i))
+            {
+                printf("address generator\n");
+                ADDRDELTA displacement = INS_OperandMemoryDisplacement(ins, i);
+                REG baseReg      = INS_OperandMemoryBaseReg(ins, i);
+                std::cout << REG_StringShort(baseReg) << std::endl;
+                std::cout << displacement << std::endl;
+            }
+            else if (INS_OperandIsBranchDisplacement(ins, i))
+            {
+                printf("branch displacement\n");
+                //std::cout << INS_MemoryOperandElementCount(ins, i) << std::endl;
+                //std::cout << INS_MemoryOperandIndexToOperandIndex(ins, i) << std::endl;
+                std::cout << std::hex << INS_DirectControlFlowTargetAddress(ins) << std::endl;
+                std::cout << INS_MemoryDisplacement(ins) << std::endl;
+            }
+            else if (INS_OperandIsFixedMemop(ins,i))
+            {
+                printf("fixed memop\n");
+                ADDRDELTA displacement = INS_OperandMemoryDisplacement(ins, i);
+                REG baseReg      = INS_OperandMemoryBaseReg(ins, i);
+                std::cout << REG_StringShort(baseReg) << std::endl;
+                std::cout << displacement << std::endl;
+            }
             else if(INS_OperandIsReg(ins, i))
             {
                 // register operand
@@ -329,7 +354,7 @@ static InsInfo *makeInsInfo(INS ins)
                 std::cout << INS_OperandImmediate(ins, i) << std::endl;
             }
         }
-
+        assert(false);
     }
     break;
 
