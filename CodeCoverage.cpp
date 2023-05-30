@@ -41,6 +41,7 @@ enum class InsType
 {
     BranchOrCall,
     Ret,
+    Cmp,
     Other
 };
 
@@ -55,8 +56,6 @@ class Operand
 {
 public:
     OperandType Type;
-    bool IsRead;
-    bool IsWrite;
     bool IsSrc;
     bool IsDst;
 };
@@ -83,6 +82,10 @@ public:
 class InsInfo
 {
 public:
+    InsInfo(InsType type) : Type(type)
+    {
+    }
+protected:
     InsType Type;
     ADDRINT Addr;
     USIZE Size;
@@ -101,6 +104,9 @@ public:
 class InsCmp : public InsInfo
 {
 public:
+    InsCmp() : InsInfo(InsType::Cmp)
+    {
+    }
 };
 
 class InsJnle : public InsInfo
@@ -240,42 +246,78 @@ static InsInfo *makeInsInfo(INS ins)
     {
         printf("cmp...\n");
         // P289
-        pInsInfo = new InsInfo();
-        pInsInfo->Type = InsType::Other;
+        pInsInfo = new InsCmp();
 
         // check dst operand, src operand
         // operand dst: memory or register
         // operand src: register or immediate
-        // savke address and register
-        UINT32 cnt = INS_OperandCount(ins);
-        for (UINT32 i = 0; i < cnt; i++)
+        // save address and register
+        if (INS_OperandIsMemory(ins, 0))
         {
-            if (INS_OperandRead(ins, i))
-            {
-                // read operand
-            }
-            if (INS_OperandWritten(ins, i))
-            {
-                // write operand
-            }
-            if(INS_OperandIsMemory(ins, i))
-            {
-                // memory operand
-                // save memory address
-                ADDRDELTA displacement = INS_OperandMemoryDisplacement(ins, i);
-                REG baseReg      = INS_OperandMemoryBaseReg(ins, i);
-                std::cout << REG_StringShort(baseReg) << std::endl;
-                std::cout << displacement << std::endl;
-            }
-            else if(INS_OperandIsReg(ins, i))
-            {
-                // register operand
-                // save register
-            }
-            else if(INS_OperandIsImmediate(ins, i))
-            {
-            }
+            // memory operand
+            // save memory address
+            printf("memory operand\n");
+            ADDRDELTA displacement = INS_OperandMemoryDisplacement(ins, 0);
+            REG baseReg = INS_OperandMemoryBaseReg(ins, i);
+            MemoryOperand *dst = new MemoryOperand();
+            dst->Issrc = false;
+            dst->IsDst = true;
+            dst->BaseReg = baseReg;
+            dst->Offset = displacement;
+            pInsInfo->Operands.push_back(dst);
+
+            std::cout << REG_StringShort(baseReg) << std::endl;
+            std::cout << displacement << std::endl;
         }
+        else if(INS_OperandIsReg(ins, 0))
+        {
+            printf("register operand\n");
+            RegOperand *dst = new RegOperand();
+            dst->Issrc = false;
+            dst->IsDst = true;
+            dst->Reg = INS_OperandReg(ins, 0);
+            std::cout << REG_StringShort(src) << std::endl;
+            pInsInfo->Operands.push_back(dst);
+        }
+        else
+        {
+            assert(false);
+        }
+
+        // check src operand
+        if (INS_OperandIsReg(ins, 1))
+        {
+            // register operand
+            // save register
+            printf("register operand\n");
+            REG src = INS_OperandReg(ins, 1);
+            RegOperand *src = new RegOperand();
+            src->IsSrc = true;
+            src->IsDst = false;
+            src->Reg = INS_OperandReg(ins, 0);
+            std::cout << REG_StringShort(src) << std::endl;
+            pInsInfo->Operands.push_back(src);
+
+            std::cout << REG_StringShort(src) << std::endl;
+        }
+        else if(INS_OperandIsImmediate(ins, 1))
+        {
+            // immediate operand
+            // save immediate
+            printf("immediate operand\n");
+            ADDRINT immediate = INS_OperandImmediate(ins, 1);
+            ImmediateOperand *src = new ImmediateOperand();
+            src->IsSrc = true;
+            src->IsDst = false;
+            src->ImmediateValue = immediate;
+            std::cout << immediate << std::endl;
+        }
+        else
+        {
+            assert(false);
+        }
+        printf("cmp end...\n");
+        assert(false);
     }
     break;
 
@@ -354,14 +396,14 @@ static InsInfo *makeInsInfo(INS ins)
                 std::cout << INS_OperandImmediate(ins, i) << std::endl;
             }
         }
-        assert(false);
+        //assert(false);
     }
     break;
 
     default:
     {
         std::cerr << "Unknown opcode: " << opcode << std::endl;
-        assert(false);
+        //assert(false);
     }
     break;
     }
