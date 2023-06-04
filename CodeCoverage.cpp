@@ -64,7 +64,7 @@ class MemoryOperand : public Operand
 {
 public:
     REG BaseReg;
-    INT32 offset;
+    INT32 Offset;
 };
 
 class ImmediateOperand : public Operand
@@ -85,15 +85,16 @@ public:
     InsInfo(InsType type) : Type(type)
     {
     }
-protected:
-    InsType Type;
+public:
+    OPCODE Opcode;
+    std::vector<Operand *> Operands;
     ADDRINT Addr;
     USIZE Size;
     std::string Disassemble;
     ADDRINT NextAddr;
-    OPCODE Opcode;
-    std::vector<Operand *> Operands;
 
+protected:
+    InsType Type;
 public:
     virtual ADDRINT Execute(EFlags &eflags)
     {
@@ -112,6 +113,10 @@ public:
 class InsJnle : public InsInfo
 {
 public:
+    InsJnle() : InsInfo(InsType::BranchOrCall)
+    {
+    }
+
     ADDRINT GetBranchAddr(EFlags &eflags)
     {
         ADDRINT branchAddr = NextAddr;
@@ -185,8 +190,7 @@ static InsInfo *makeInsInfo(INS ins)
     {
     case XED_ICLASS_NOP:
     {
-        pInsInfo = new InsInfo();
-        pInsInfo->Type = InsType::Other;
+        pInsInfo = new InsInfo(InsType::Other);
     }
     break;
     {
@@ -258,9 +262,9 @@ static InsInfo *makeInsInfo(INS ins)
             // save memory address
             printf("memory operand\n");
             ADDRDELTA displacement = INS_OperandMemoryDisplacement(ins, 0);
-            REG baseReg = INS_OperandMemoryBaseReg(ins, i);
+            REG baseReg = INS_OperandMemoryBaseReg(ins, 0);
             MemoryOperand *dst = new MemoryOperand();
-            dst->Issrc = false;
+            dst->IsSrc = false;
             dst->IsDst = true;
             dst->BaseReg = baseReg;
             dst->Offset = displacement;
@@ -273,10 +277,9 @@ static InsInfo *makeInsInfo(INS ins)
         {
             printf("register operand\n");
             RegOperand *dst = new RegOperand();
-            dst->Issrc = false;
+            dst->IsSrc = false;
             dst->IsDst = true;
             dst->Reg = INS_OperandReg(ins, 0);
-            std::cout << REG_StringShort(src) << std::endl;
             pInsInfo->Operands.push_back(dst);
         }
         else
@@ -290,15 +293,12 @@ static InsInfo *makeInsInfo(INS ins)
             // register operand
             // save register
             printf("register operand\n");
-            REG src = INS_OperandReg(ins, 1);
             RegOperand *src = new RegOperand();
             src->IsSrc = true;
             src->IsDst = false;
             src->Reg = INS_OperandReg(ins, 0);
-            std::cout << REG_StringShort(src) << std::endl;
+            std::cout << REG_StringShort(src->Reg) << std::endl;
             pInsInfo->Operands.push_back(src);
-
-            std::cout << REG_StringShort(src) << std::endl;
         }
         else if(INS_OperandIsImmediate(ins, 1))
         {
@@ -331,7 +331,6 @@ static InsInfo *makeInsInfo(INS ins)
     {
         printf("jnle ...\n");
         pInsInfo = new InsJnle();
-        pInsInfo->Type = InsType::BranchOrCall;
         UINT32 cnt = INS_OperandCount(ins);
         printf("!!! INS_OperandCount: %d\n", cnt);
         for (UINT32 i = 0; i < cnt; i++)
