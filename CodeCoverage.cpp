@@ -8,6 +8,7 @@
 
 #include "pin.H"
 #include "util.h"
+#include "logger.h"
 
 struct EFlags
 {    
@@ -128,7 +129,7 @@ public:
     }
 };
 
-struct BasicBlockInfo
+struct BasicBlock
 {
     ADDRINT Start;
     bool Executed;
@@ -143,7 +144,7 @@ struct FuncCodeCoverage
     std::map<ADDRINT, std::string> AddrAsmMap;
     std::map<INT32, bool> LineCoveredMap;
     std::map<ADDRINT, bool> InsCoveredMap;
-    std::vector<BasicBlockInfo> BasicBlocks;
+    std::map<ADDRINT, BasicBlock> BasicBlocks; // key: start address of basic block, value: basic block info
     UINT32 TotalLineCount;
     UINT32 CoveredLineCount;
 };
@@ -164,6 +165,9 @@ static std::map<std::string, FileCodeCoverage> s_fileCodeCoverageMap;
 static std::map<std::string, std::string> s_funcFileMap;
 static std::map<ADDRINT, std::string> s_addrFuncNameMap;
 
+// =====================================================================
+// Check if the instruction is the end of basic block
+// =====================================================================
 static bool isBlockEnd(INS ins)
 {
     INT32 category = INS_Category(ins);
@@ -171,7 +175,7 @@ static bool isBlockEnd(INS ins)
     {
         return true;
     }
-    if (category == XED_CATEGORY_CALL)
+    if (category == XED_CATEGORY_UNCOND_BR)
     {
         return true;
     }
@@ -182,6 +186,7 @@ static bool isBlockEnd(INS ins)
     return false;
 }
 
+#if 0
 static InsInfo *makeInsInfo(INS ins)
 {
     InsInfo *pInsInfo;
@@ -413,7 +418,7 @@ static InsInfo *makeInsInfo(INS ins)
     pInsInfo->Disassemble = INS_Disassemble(ins);
     return pInsInfo;
 }
-
+#endif
 
 static void ImageLoad(IMG img, void *v)
 {
@@ -484,11 +489,18 @@ static void ImageLoad(IMG img, void *v)
             const std::string &funcName = RTN_Name(rtn);
             RTN_Open(rtn);
 
-            BasicBlockInfo basicBlockInfo;
-            basicBlockInfo.Executed = false;
+            BasicBlock basicBlock;
+            basicBlock.Executed = false;
+            bool isBlockStart = true;
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
                 addr = INS_Address(ins);
+                if (isBlockStart)
+                {
+                    basicBlock.Start = addr;
+                    isBlockStart = false;
+                }
+
                 PIN_GetSourceLocation(addr, &col, &line, &filePath);
 
                 s_addrFuncNameMap[addr] = funcName;
@@ -498,18 +510,22 @@ static void ImageLoad(IMG img, void *v)
                 s_fileCodeCoverageMap[filePath].Lines[line - 1].Executable = true;
 
                 // initialize funcCodeCoverage
+                funcCodeCoverage.Name = funcName;
                 funcCodeCoverage.AddrLineMap[addr]      = line;
                 funcCodeCoverage.LineCoveredMap[line]   = false;
                 funcCodeCoverage.InsCoveredMap[addr]    = false;
                 funcCodeCoverage.AddrAsmMap[addr]       = INS_Disassemble(ins);
 
                 // UINT64 v = INS_OperandImmediate(ins, 1);
-                InsInfo *pInsInfo = makeInsInfo(ins);
-                basicBlockInfo.InsList.push_back(pInsInfo);
+                //InsInfo *pInsInfo = makeInsInfo(ins);
+                //basicBlock.InsList.push_back(pInsInfo);
                 if (isBlockEnd(ins))
                 {
-                    //funcCodeCoverage.BasicBlocks.push_back(basicBlockInfo);
-                    //basicBlockInfo = BasicBlockInfo();
+                    // TODO ブロックの終了となる命令であればジャンプ先アドレスを取得する
+                    // 条件分岐命令であれば、ジャンプしなかった場合、次の命令のアドレスを取得する
+                    isBlockStart = true;
+                    funcCodeCoverage.BasicBlocks[basicBlock.Start] = basicBlock;
+                    basicBlock = BasicBlock();
                 }
             }
 
@@ -519,6 +535,14 @@ static void ImageLoad(IMG img, void *v)
 
             s_fileCodeCoverageMap[filePath].FuncCodeCoverageMap[funcName] = funcCodeCoverage;
             s_funcFileMap[funcName] = filePath;
+
+            // dump for debug
+            Logger::DLog("Func:%s, BasicBlocks:[%d]", funcCodeCoverage.Name, funcCodeCoverage.BasicBlocks.size());
+            for (const auto &entry : funcCodeCoverage.BasicBlocks)
+            {
+                Logger::DLog("BasicBlock Start:[%lX]", entry.second.Start);
+            }
+
         }
     }
 
@@ -971,28 +995,28 @@ static VOID Instruction(INS ins, VOID *v)
         return;
     }
 
-    UINT32 operandCnt = INS_OperandCount(ins);
     // UINT64 v = INS_OperandImmediate(ins, 1);
-    std::string disassemble = INS_Disassemble(ins);
-    std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
+    // std::string disassemble = INS_Disassemble(ins);
+    // UINT32 operandCnt = INS_OperandCount(ins);
+    //std::cout << StringHelper::strprintf("%s:0x%lx %s operandCount:[%d], opeElmCnt:[%d]", funcName, addr, disassemble, operandCnt) << std::endl;
     for (UINT32 op = 0; op < INS_OperandCount(ins); op++)
     {
         if (INS_OperandIsImplicit(ins,op))
         {
-            std::cerr << "Implicit: " << std::endl;
+            // std::cerr << "Implicit: " << std::endl;
         }
         if (INS_OperandIsReg(ins,op))
         {
-            std::cerr << "IsReg: " << std::endl;
+            // std::cerr << "IsReg: " << std::endl;
         }
         
         if (INS_OperandIsImmediate(ins, op))
         {
-            std::cerr << "Immediate: " << std::hex << INS_OperandImmediate(ins, op) << std::endl;
+            // std::cerr << "Immediate: " << std::hex << INS_OperandImmediate(ins, op) << std::endl;
         }
         if (INS_OperandIsMemory(ins, op))
         {
-            std::cerr << "Memory: " << std::endl;
+            // std::cerr << "Memory: " << std::endl;
         }
     }
 
