@@ -9,13 +9,6 @@
 #include "pin.H"
 #include "util.h"
 
-enum SLICING_STATUS
-{
-    SLICING_STATUS_NONE,
-    SLICING_STATUS_WAITING_CMP,
-    SLICING_STATUS_SLICING
-};
-
 struct LineInfo
 {
     UINT32 LineNumber;
@@ -49,6 +42,44 @@ struct FileCodeCoverage
     std::vector<LineInfo> Lines;
 };
 
+enum SLICING_STATUS
+{
+    SLICING_STATUS_NONE,
+    SLICING_STATUS_WAITING_CMP,
+    SLICING_STATUS_SLICING
+};
+
+enum CmpType
+{
+    CMP_TYPE_EQ,    // ==
+    CMP_TYPE_NE,    // !=
+    CMP_TYPE_LT,    // <
+    CMP_TYPE_LE,    // <=
+    CMP_TYPE_GT,    // >
+    CMP_TYPE_GE     // >=
+};
+
+struct CmpConstraint
+{
+    // operand
+    CmpType cmpType;
+};
+
+struct CompareInfo
+{
+    INS cmpInsn;
+    std::vector<INS> targetSlices;
+    CmpConstraint cmpConstraint;
+};
+
+struct BasicBlock
+{
+    ADDRINT entryAddr;
+    INT branchInsn;
+    CompareInfo compareInfo;
+    std::vector<BasicBlock> nextBlocks;
+};
+
 // =====================================================================
 // Global Variables
 // =====================================================================
@@ -66,6 +97,13 @@ static void DLog(const char *fmt, ...)
     fprintf(stdout, "\n");
     va_end(args);
 }
+
+static bool isFlagEffectiveInsn(INS ins)
+{
+    std::string mnemonic = INS_Mnemonic(ins);
+    return mnemonic == "CMP";
+}
+
 
 static void ImageLoad(IMG img, void *v)
 {
@@ -170,7 +208,31 @@ static void ImageLoad(IMG img, void *v)
                 break;
                 case SLICING_STATUS_WAITING_CMP:
                 {
-
+                    //CmpType cmpType = CMP_TYPE_EQ;
+                    if (isFlagEffectiveInsn(ins))
+                    {
+                        UINT32 count = INS_OperandCount(ins);
+                        for (UINT32 i = 0; i < count; i++)
+                        {
+                            if (INS_OperandIsReg(ins, i))
+                            {
+                                REG reg = INS_OperandReg(ins, i);
+                                DLog("operand reg: %s\n", REG_StringShort(reg));
+                                //basicBlock.cmp.targetSlices.push_back(ins);
+                                continue;
+                            }
+                            if (INS_OperandIsMemory(ins, i))
+                            {
+                                //logger.DLog("CMP: %s\n", insn.Mnemonic)
+                                //basicBlock.branchInsn = insn
+                                REG baseReg = INS_MemoryBaseReg(ins);
+                                ADDRDELTA disp = INS_MemoryDisplacement(ins);
+                                DLog("operand mem: %s %d\n", REG_StringShort(baseReg), disp);
+                                continue;
+                            }
+                        }
+                    }
+                slicingStatus = SLICING_STATUS_SLICING;
                 }
                 break;
                 case SLICING_STATUS_SLICING:
