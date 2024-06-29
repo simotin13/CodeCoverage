@@ -9,6 +9,13 @@
 #include "pin.H"
 #include "util.h"
 
+enum SLICING_STATUS
+{
+    SLICING_STATUS_NONE,
+    SLICING_STATUS_WAITING_CMP,
+    SLICING_STATUS_SLICING
+};
+
 struct LineInfo
 {
     UINT32 LineNumber;
@@ -48,8 +55,17 @@ struct FileCodeCoverage
 static std::string s_targetName;
 static std::map<std::string, FileCodeCoverage> s_fileCodeCoverageMap;
 static std::map<std::string, std::string> s_funcFileMap;
-
 static std::map<ADDRINT, std::string> s_addrFuncNameMap;
+
+static void DLog(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    fprintf(stdout, "[CodeCoverage] ");
+    vfprintf(stdout, fmt, args);
+    fprintf(stdout, "\n");
+    va_end(args);
+}
 
 static void ImageLoad(IMG img, void *v)
 {
@@ -119,6 +135,7 @@ static void ImageLoad(IMG img, void *v)
             FuncCodeCoverage funcCodeCoverage;
             const std::string &funcName = RTN_Name(rtn);
             RTN_Open(rtn);
+            SLICING_STATUS slicingStatus = SLICING_STATUS_NONE;
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
                 addr = INS_Address(ins);
@@ -135,6 +152,34 @@ static void ImageLoad(IMG img, void *v)
                 funcCodeCoverage.LineCoveredMap[line]   = false;
                 funcCodeCoverage.InsCoveredMap[addr]    = false;
                 funcCodeCoverage.AddrAsmMap[addr]       = INS_Disassemble(ins);
+
+                std::string disas = StringHelper::strprintf("0x%x:\t%s", addr, INS_Disassemble(ins));
+                std::cout << disas << std::endl;
+                switch (slicingStatus)
+                {
+                case SLICING_STATUS_NONE:
+                {
+                    if (INS_IsBranch(ins))
+                    {
+                        //slicingStatus = SLICING_STATUS_WAITING_CMP;
+                        //logger.DLog("Branch: %s\n", insn.Mnemonic)
+                        //basicBlock.branchInsn = insn
+                        slicingStatus = SLICING_STATUS_WAITING_CMP;
+                    }
+                }
+                break;
+                case SLICING_STATUS_WAITING_CMP:
+                {
+
+                }
+                break;
+                case SLICING_STATUS_SLICING:
+                {
+                    //logger.DLog("Slicing: %s\n", insn.Mnemonic)
+                    //basicBlock.insns.append(insn)
+                }
+                break;
+                }
             }
 
             funcCodeCoverage.TotalLineCount = funcCodeCoverage.LineCoveredMap.size();
@@ -586,7 +631,7 @@ static VOID Instruction(INS ins, VOID *v)
 
 VOID Fini(INT32 code, VOID* v)
 {
-    std::cout << "[CodeCoverage] Program trace Finished, generating Coverage report..." << std::endl;
+    DLog("Program trace Finished, generating Coverage report...");
 
     // generate index.html
     struct stat st;
@@ -610,13 +655,13 @@ VOID Fini(INT32 code, VOID* v)
         generateAsmHtml(asmReportFilePath, sourceFilePath, fileCodeCoverage);
     }
 
-    std::cout << "[CodeCoverage] Coverage Report generated. Please check `report/index.html' using your browser." << std::endl;
+    DLog("Coverage Report generated. Please check `report/index.html' using your browser.");
     return;
 }
 
 int main(int argc, char **argv)
 {
-    std::cout << "[CodeCoverage] Start..." << std::endl;
+    DLog("Program trace Start");
     PIN_InitSymbols();
     if(PIN_Init(argc,argv)) {
         std::exit(EXIT_FAILURE);
@@ -626,7 +671,7 @@ int main(int argc, char **argv)
     INS_AddInstrumentFunction(Instruction, 0);
     PIN_AddFiniFunction(Fini, 0);
 
-    std::cout << "[CodeCoverage] Program trace Start" << std::endl;
+    DLog("Program trace Start");
 
     PIN_StartProgram();
     std::exit(EXIT_SUCCESS);
