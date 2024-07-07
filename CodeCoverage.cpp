@@ -98,12 +98,24 @@ static void DLog(const char *fmt, ...)
     va_end(args);
 }
 
-static bool isFlagEffectiveInsn(INS ins)
+static bool isFlagEffectiveIns(INS ins)
 {
     std::string mnemonic = INS_Mnemonic(ins);
     return mnemonic == "CMP";
 }
 
+static bool isWriteIns(INS ins)
+{
+    if (INS_IsMemoryWrite(ins))
+    {
+        return true;
+    }
+    if (INS_IsMov(ins))
+    {
+        return true;
+    }
+    return false;
+}
 
 static void ImageLoad(IMG img, void *v)
 {
@@ -196,25 +208,20 @@ static void ImageLoad(IMG img, void *v)
             {
                 std::string disas = StringHelper::strprintf("0x%x:\t%s", addr, INS_Disassemble(ins));
                 std::cout << disas << std::endl;
-                if (INS_IsMemoryWrite(ins))
-                {
-                    DLog("Memory Write: %s\n", INS_Mnemonic(ins));
-                }
-
                 switch (slicingStatus)
                 {
                 case SLICING_STATUS_NONE:
                 {
                     if (INS_IsBranch(ins))
                     {
-                        DLog("Branch: %s\n", INS_Mnemonic(ins));
+                        DLog("Branch: %s", INS_Mnemonic(ins));
                         // XED_CATEGORY_UNCOND_BR
                         if (INS_Category(ins) == XED_CATEGORY_UNCOND_BR)
                         {
                             DLog("Unconditional Branch: %s\n", INS_Mnemonic(ins));
                             continue;
                         }
-                        DLog("conditional Branch: %s\n", INS_Mnemonic(ins));
+                        DLog("conditional Branch: %s", INS_Mnemonic(ins));
                         //slicingStatus = SLICING_STATUS_WAITING_CMP;
                         //logger.DLog("Branch: %s\n", insn.Mnemonic)
                         //basicBlock.branchInsn = insn
@@ -225,9 +232,9 @@ static void ImageLoad(IMG img, void *v)
                 case SLICING_STATUS_WAITING_CMP:
                 {
                     //CmpType cmpType = CMP_TYPE_EQ;
-                    if (isFlagEffectiveInsn(ins))
+                    if (isFlagEffectiveIns(ins))
                     {
-                        DLog("cmp found : %s\n", INS_Mnemonic(ins));
+                        DLog("cmp found : %s", INS_Mnemonic(ins));
                         UINT32 count = INS_OperandCount(ins);
                         for (UINT32 i = 0; i < count; i++)
                         {
@@ -254,8 +261,26 @@ static void ImageLoad(IMG img, void *v)
                 break;
                 case SLICING_STATUS_SLICING:
                 {
-                    //logger.DLog("Slicing: %s\n", insn.Mnemonic)
-                    //basicBlock.insns.append(insn)
+                    if (isWriteIns(ins))
+                    {
+                        UINT32 operandCnt = INS_OperandCount(ins);
+                        for (UINT32 i = 0; i < operandCnt; i++)
+                        {
+                            if (INS_OperandIsReg(ins, i))
+                            {
+                                REG reg = INS_OperandReg(ins, i);
+                                DLog("write reg: %s\n", REG_StringShort(reg));
+                                continue;
+                            }
+                            if (INS_OperandIsMemory(ins, i))
+                            {
+                                REG baseReg = INS_MemoryBaseReg(ins);
+                                ADDRDELTA disp = INS_MemoryDisplacement(ins);
+                                DLog("write mem: [%s] %d\n", REG_StringShort(baseReg), disp);
+                                continue;
+                            }
+                        }
+                    }
                 }
                 break;
                 }
