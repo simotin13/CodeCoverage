@@ -14,5 +14,7 @@ cd examples/c_function_call
 make
 popd
 
-# run code coverage tool
-
+pushd .
+cd examples/c_simple_branch
+make
+popd

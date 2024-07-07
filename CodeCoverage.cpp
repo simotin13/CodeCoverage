@@ -173,7 +173,6 @@ static void ImageLoad(IMG img, void *v)
             FuncCodeCoverage funcCodeCoverage;
             const std::string &funcName = RTN_Name(rtn);
             RTN_Open(rtn);
-            SLICING_STATUS slicingStatus = SLICING_STATUS_NONE;
             for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins))
             {
                 addr = INS_Address(ins);
@@ -190,15 +189,32 @@ static void ImageLoad(IMG img, void *v)
                 funcCodeCoverage.LineCoveredMap[line]   = false;
                 funcCodeCoverage.InsCoveredMap[addr]    = false;
                 funcCodeCoverage.AddrAsmMap[addr]       = INS_Disassemble(ins);
+            }
 
+            SLICING_STATUS slicingStatus = SLICING_STATUS_NONE;
+            for (INS ins = RTN_InsTail(rtn); INS_Valid(ins); ins = INS_Prev(ins))
+            {
                 std::string disas = StringHelper::strprintf("0x%x:\t%s", addr, INS_Disassemble(ins));
                 std::cout << disas << std::endl;
+                if (INS_IsMemoryWrite(ins))
+                {
+                    DLog("Memory Write: %s\n", INS_Mnemonic(ins));
+                }
+
                 switch (slicingStatus)
                 {
                 case SLICING_STATUS_NONE:
                 {
                     if (INS_IsBranch(ins))
                     {
+                        DLog("Branch: %s\n", INS_Mnemonic(ins));
+                        // XED_CATEGORY_UNCOND_BR
+                        if (INS_Category(ins) == XED_CATEGORY_UNCOND_BR)
+                        {
+                            DLog("Unconditional Branch: %s\n", INS_Mnemonic(ins));
+                            continue;
+                        }
+                        DLog("conditional Branch: %s\n", INS_Mnemonic(ins));
                         //slicingStatus = SLICING_STATUS_WAITING_CMP;
                         //logger.DLog("Branch: %s\n", insn.Mnemonic)
                         //basicBlock.branchInsn = insn
@@ -211,6 +227,7 @@ static void ImageLoad(IMG img, void *v)
                     //CmpType cmpType = CMP_TYPE_EQ;
                     if (isFlagEffectiveInsn(ins))
                     {
+                        DLog("cmp found : %s\n", INS_Mnemonic(ins));
                         UINT32 count = INS_OperandCount(ins);
                         for (UINT32 i = 0; i < count; i++)
                         {
@@ -227,7 +244,7 @@ static void ImageLoad(IMG img, void *v)
                                 //basicBlock.branchInsn = insn
                                 REG baseReg = INS_MemoryBaseReg(ins);
                                 ADDRDELTA disp = INS_MemoryDisplacement(ins);
-                                DLog("operand mem: %s %d\n", REG_StringShort(baseReg), disp);
+                                DLog("operand mem: [%s] %d\n", REG_StringShort(baseReg), disp);
                                 continue;
                             }
                         }
@@ -723,7 +740,6 @@ VOID Fini(INT32 code, VOID* v)
 
 int main(int argc, char **argv)
 {
-    DLog("Program trace Start");
     PIN_InitSymbols();
     if(PIN_Init(argc,argv)) {
         std::exit(EXIT_FAILURE);
@@ -733,8 +749,11 @@ int main(int argc, char **argv)
     INS_AddInstrumentFunction(Instruction, 0);
     PIN_AddFiniFunction(Fini, 0);
 
+
     DLog("Program trace Start");
 
     PIN_StartProgram();
+
+    DLog("Program trace Stop");
     std::exit(EXIT_SUCCESS);
 }
