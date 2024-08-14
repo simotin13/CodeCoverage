@@ -128,7 +128,10 @@ static void ImageLoad(IMG img, void *v)
 
                 // set executable line
                 // note that line number start from 1
-                s_fileCodeCoverageMap[filePath].Lines[line - 1].Executable = true;
+                if (0 < line)
+                {
+                    s_fileCodeCoverageMap[filePath].Lines[line - 1].Executable = true;
+                }
 
                 // initialize funcCodeCoverage
                 funcCodeCoverage.AddrLineMap[addr]      = line;
